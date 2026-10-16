@@ -41,6 +41,7 @@ void AnalysisThread::run()
     clock.start();
     int frames = 0;
     qint64 fpsWindowStart = 0;
+    int analysisFps = 0;   // 持久化：非窗口收口帧也携带最近统计值（否则角标大部分时间显示 0Hz）
 
     qInfo() << "Analysis thread started";
     while (_running) {
@@ -75,14 +76,15 @@ void AnalysisThread::run()
 
         result.processMs = static_cast<int>(cost.elapsed());
 
-        // 分析帧率统计（约每秒刷新一次）
+        // 分析帧率统计（约每秒刷新一次；每帧都携带最近值）
         ++frames;
         qint64 window = clock.elapsed() - fpsWindowStart;
         if (window >= 1000) {
-            result.analysisFps = static_cast<int>(frames * 1000.0 / window + 0.5);
+            analysisFps = static_cast<int>(frames * 1000.0 / window + 0.5);
             frames = 0;
             fpsWindowStart = clock.elapsed();
         }
+        result.analysisFps = analysisFps;
 
         emit analysisReady(result);
     }

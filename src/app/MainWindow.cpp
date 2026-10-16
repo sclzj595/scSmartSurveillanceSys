@@ -6,6 +6,8 @@
 #include <QMessageBox>
 #include <QStyleFactory>
 #include <QCloseEvent>
+#include <QFutureWatcher>
+#include <QtConcurrent/QtConcurrentRun>
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
@@ -158,32 +160,36 @@ void MainWindow::initUI()
     });
     btnLayout->addWidget(_forbiddenZoneBtn);
 
-    // 注册人脸
+    // 注册人脸（异步：检测+训练在线程池执行，GUI 不冻结；结果经 watcher 回 GUI）
     _registerFaceBtn = new QPushButton("注册人脸", this);
     connect(_registerFaceBtn, &QPushButton::clicked, this, [this]() {
-        // 获取当前帧并注册最大人脸
-        if (!_lastFrame.empty()) {
-            cv::Mat gray;
-            cv::cvtColor(_lastFrame, gray, cv::COLOR_BGR2GRAY);
-            cv::equalizeHist(gray, gray);   // 均衡化由调用方负责（与 analyze 路径一致）
-            
-            // 检测人脸
-            std::vector<cv::Rect> faces;
-            _faceRecognizer->detectFaces(gray, faces);
-            
-            if (!faces.empty()) {
-                // 选择最大人脸
-                auto largest = std::max_element(faces.begin(), faces.end(),
-                    [](const cv::Rect& a, const cv::Rect& b) {
-                        return a.area() < b.area();
-                    });
-                
-                cv::Mat faceROI = gray(*largest);
-                _faceRecognizer->registerFace(faceROI, "新用户");
-                
-                _logLabel->setText("人脸注册成功: 新用户");
-            }
+        if (_lastFrame.empty()) {
+            _logLabel->setText("当前无画面，无法注册");
+            return;
         }
+        _registerFaceBtn->setEnabled(false);
+        _logLabel->setText("正在注册人脸…");
+
+        cv::Mat snapshot = _lastFrame.clone();  // 私有副本，避免与渲染/分析共享数据
+        auto* watcher = new QFutureWatcher<FaceRecognition::RegisterStatus>(this);
+        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher]() {
+            _registerFaceBtn->setEnabled(true);
+            switch (watcher->result()) {
+            case FaceRecognition::RegisterStatus::Ok:
+                _logLabel->setText("人脸注册成功: 新用户");
+                break;
+            case FaceRecognition::RegisterStatus::NoFace:
+                _logLabel->setText("注册失败：未检测到人脸，请正对摄像头后重试");
+                break;
+            case FaceRecognition::RegisterStatus::FaceTooSmall:
+                _logLabel->setText("注册失败：人脸过小，请靠近摄像头后重试");
+                break;
+            }
+            watcher->deleteLater();
+        });
+        watcher->setFuture(QtConcurrent::run([this, snapshot]() {
+            return _faceRecognizer->registerFromFrame(snapshot, QStringLiteral("新用户"));
+        }));
     });
     btnLayout->addWidget(_registerFaceBtn);
 

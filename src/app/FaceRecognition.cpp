@@ -157,9 +157,36 @@ void FaceRecognition::analyze(const cv::Mat& frame, std::vector<FaceResult>& out
     }
 }
 
-void FaceRecognition::registerFace(const cv::Mat& face, const QString& name) {
-    QMutexLocker locker(&_mutex);   // 与分析线程的 predict/train 互斥
+FaceRecognition::RegisterStatus FaceRecognition::registerFromFrame(const cv::Mat& bgrFrame, const QString& name) {
+    if (bgrFrame.empty()) return RegisterStatus::NoFace;   // 调用方保证非空，此处兜底
 
+    cv::Mat gray;
+    cv::cvtColor(bgrFrame, gray, cv::COLOR_BGR2GRAY);
+    cv::equalizeHist(gray, gray);
+
+    // 全程持锁：检测与训练、分析线程的检测互斥（同一 CascadeClassifier
+    // 不允许并发 detectMultiScale，否则概率性崩溃）
+    QMutexLocker locker(&_mutex);
+
+    std::vector<cv::Rect> faces;
+    detectFaces(gray, faces);
+    if (faces.empty()) return RegisterStatus::NoFace;
+
+    // 选择最大人脸
+    auto largest = std::max_element(faces.begin(), faces.end(),
+        [](const cv::Rect& a, const cv::Rect& b) {
+            return a.area() < b.area();
+        });
+
+    // 与 analyze 同一口径：人脸过小不参与识别，也不允许注册
+    if (largest->width < 60 || largest->height < 60) return RegisterStatus::FaceTooSmall;
+
+    registerFaceLocked(gray(*largest), name);
+    return RegisterStatus::Ok;
+}
+
+void FaceRecognition::registerFaceLocked(const cv::Mat& face, const QString& name) {
+    // 前置条件：_mutex 已由调用方持有
     cv::Mat processedFace;
     if(face.channels() > 1) {
         cv::cvtColor(face, processedFace, cv::COLOR_BGR2GRAY);
