@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRD · 智能安防监控系统 v1.0</title>
+<style>
+  :root{
+    --bg:#fafafa; --paper:#ffffff; --ink:#18181b; --ink-2:#52525b; --ink-3:#a1a1aa;
+    --line:#e4e4e7; --accent:#0f766e; --accent-soft:#f0fdfa; --accent-line:#99f6e4;
+    --red:#dc2626; --red-soft:#fef2f2; --amber:#d97706; --amber-soft:#fffbeb;
+    --gray-soft:#f4f4f5;
+    --mono:ui-monospace,'Cascadia Mono','Source Code Pro',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.75}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .wrap{display:flex;max-width:1240px;margin:0 auto;gap:32px;padding:0 24px}
+  nav{width:230px;flex-shrink:0;position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;padding:36px 0 40px;font-size:13px}
+  nav .brand{font-weight:700;font-size:15px;margin-bottom:4px}
+  nav .ver{color:var(--ink-3);font-size:12px;margin-bottom:20px;font-family:var(--mono)}
+  nav a{display:block;color:var(--ink-2);padding:4px 10px;border-left:2px solid transparent}
+  nav a:hover{color:var(--accent);border-left-color:var(--accent-line);text-decoration:none;background:var(--accent-soft)}
+  nav .grp{margin:14px 0 4px;padding-left:10px;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+  main{flex:1;min-width:0;max-width:880px;padding:36px 0 120px}
+
+  h1{font-size:28px;line-height:1.3;margin-bottom:6px;letter-spacing:-.01em}
+  h2{font-size:20px;margin:52px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  h3{font-size:16px;margin:30px 0 10px}
+  h4{font-size:14px;margin:20px 0 8px;color:var(--ink-2)}
+  p{margin:8px 0}
+  ul,ol{padding-left:22px;margin:8px 0}
+  li{margin:3px 0}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--gray-soft);padding:1px 6px;border-radius:4px;color:#7c2d12}
+  strong{font-weight:600}
+
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 8px}
+  .chip{font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);background:var(--paper)}
+  .chip.p0{background:var(--red-soft);border-color:#fecaca;color:var(--red);font-weight:600}
+  .chip.p1{background:var(--amber-soft);border-color:#fde68a;color:var(--amber);font-weight:600}
+  .chip.p2{background:var(--gray-soft);border-color:#d4d4d8;color:var(--ink-2);font-weight:600}
+  .chip.teal{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+
+  .callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--paper);border-radius:0 8px 8px 0;padding:12px 16px;margin:14px 0;color:var(--ink-2)}
+  .callout.warn{border-left-color:var(--amber)}
+  .callout.danger{border-left-color:var(--red)}
+  .callout b{color:var(--ink)}
+
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;background:var(--paper)}
+  th{background:var(--gray-soft);text-align:left;font-weight:600;color:var(--ink-2)}
+  th,td{border:1px solid var(--line);padding:7px 10px;vertical-align:top}
+  tbody tr:hover{background:#fcfcfd}
+  td .sub{color:var(--ink-3);font-size:12px}
+
+  .flow{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:16px 0;font-size:12.5px}
+  .flow .step{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:8px 12px;min-width:120px;text-align:center}
+  .flow .step b{display:block;font-size:13px}
+  .flow .step .d{color:var(--ink-3);font-size:11.5px}
+  .flow .arr{align-self:center;padding:0 8px;color:var(--ink-3);font-weight:700}
+
+  .wire{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:16px;margin:16px 0}
+  .wire .win{border:2px solid #3f3f46;border-radius:8px;overflow:hidden;font-size:12px}
+  .wire .titlebar{background:#3f3f46;color:#fff;padding:4px 12px;display:flex;justify-content:space-between}
+  .wire .titlebar span:last-child{color:#a1a1aa}
+  .wire .body{background:#1c1c1f;padding:10px}
+  .wire .video{position:relative;background:#000;height:230px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#52525b}
+  .wire .badge{position:absolute;font-size:11px;padding:1px 7px;border-radius:4px;color:#fff}
+  .wire .hud{position:absolute;top:8px;right:10px;font-family:var(--mono);font-size:10.5px;color:#34d399}
+  .wire .fbox{position:absolute;border:2px solid #22c55e;border-radius:2px}
+  .wire .fbox .tag{position:absolute;top:-18px;left:-2px;color:#22c55e;white-space:nowrap}
+  .wire .sbox{position:absolute;border:2px dashed #ef4444;border-radius:2px}
+  .wire .sbox .tag{position:absolute;top:-18px;left:-2px;color:#ef4444;white-space:nowrap}
+  .wire .track{position:absolute;border:1.5px solid #6b7280;border-radius:2px}
+  .wire .panel{background:#232326;border-radius:4px;margin-top:8px;padding:6px 10px;color:#a1a1aa;font-size:11.5px}
+  .wire .panel .t{color:#71717a;font-family:var(--mono)}
+  .wire .ctrl{display:flex;gap:8px;margin-top:8px}
+  .wire .btn{flex:1;background:#0f766e;color:#fff;text-align:center;border-radius:4px;padding:5px 0}
+  .wire .btn.sec{background:#3f3f46}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:8px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  .fr{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:18px 22px;margin:18px 0}
+  .fr>.head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  .fr>.head .id{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:13px}
+  .fr>.head .name{font-weight:700;font-size:15px}
+  .fr dl{margin-top:8px}
+  .fr dt{font-weight:600;color:var(--ink-2);font-size:12.5px;margin-top:10px;text-transform:uppercase;letter-spacing:.05em}
+  .fr dd{margin:3px 0 0}
+  .tbd{color:var(--amber);font-weight:600}
+  .asm{color:var(--accent);font-weight:600}
+  .num{font-family:var(--mono)}
+
+  footer{border-top:1px solid var(--line);margin-top:60px;padding-top:16px;color:var(--ink-3);font-size:12px}
+  @media print{ nav{display:none} .wrap{display:block;padding:0} main{padding:0;max-width:none} body{font-size:12px} .fr{break-inside:avoid} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand">智能安防监控系统</div>
+  <div class="ver">PRD v1.0 · 评审中</div>
+  <div class="grp">文档</div>
+  <a href="#docinfo">文档信息</a>
+  <a href="#background">1 背景与目标</a>
+  <a href="#analysis">2 需求分析</a>
+  <a href="#scope">3 范围与阶段</a>
+  <a href="#model">4 产品模型</a>
+  <a href="#fr">5 功能需求</a>
+  <a href="#shared">6 共享规则</a>
+  <a href="#open">7 开放问题</a>
+</nav>
+<main>
+
+<h1 id="docinfo">智能安防监控系统 · 产品需求文档</h1>
+<div class="meta">
+  <span class="chip teal">版本 v1.0</span>
+  <span class="chip">2026-10-17</span>
+  <span class="chip">状态：评审中</span>
+  <span class="chip p0">P0 = Phase 1 本期</span>
+  <span class="chip p1">P1 = Phase 2</span>
+  <span class="chip p2">P2 = Phase 3 方向</span>
+</div>
+<p>定位：<strong>准商用单机桌面软件</strong>。基于现场摄像头的实时识别与告警工具，面向店铺、工作室、家庭门口等小微场景的现场操作员。本期以单路 USB 摄像头完成核心闭环，随后按 <strong>网络摄像头 RTSP → 门锁联动 / 运动相机 SDK</strong> 的顺序扩展硬件接入。</p>
+
+<h2 id="background">1 背景与目标</h2>
+<h3>1.1 背景与证据</h3>
+<p>项目已有一个可运行的原型（Qt + OpenCV，课程迭代成果），具备人脸检测识别、遗留物检测、禁区入侵检测三个能力骨架。但实际运行暴露出一组体验与可靠性问题，使其还不能作为日常工具使用：</p>
+<table>
+  <thead><tr><th style="width:90px">编号</th><th>观察到的现象</th><th>对用户的影响</th><th style="width:80px">严重度</th></tr></thead>
+  <tbody>
+    <tr><td class="num">D1</td><td>开启识别功能后，画面显示滞后于现场，且延迟随运行时间逐渐增大</td><td>"实时"监控失去意义，事件响应慢</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D2</td><td>帧率在 14–30 fps 间波动，肉眼可见卡顿</td><td>画面不平滑，长时间观看疲劳</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D3</td><td>识别置信度位置显示超长数字串（内部最大浮点值被直接渲染）</td><td>不可读，观感差，暴露内部状态</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D4</td><td>画面上出现大量无意义的青色检测框（脸部、耳机、肩部均被框选）</td><td>误报泛滥，用户不信任告警</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D5</td><td>手绘禁区与画面内容的实际位置不对应（窗口缩放/比例不一致时错位）</td><td>入侵判定失准，漏报误报</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D6</td><td>注册的人脸档案重启后全部丢失（仅存在于内存）</td><td>注册工作不可复用，核心能力形同虚设</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D7</td><td>事件只有一行滚动日志，无持久化记录、无截图存证</td><td>事后无法追溯"什么时候发生了什么"——安防产品的底线</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td class="num">D8</td><td>暂停后恢复，画面先回放暂停期间的旧帧</td><td>操作困惑</td><td><span class="chip p1">P1</span></td></tr>
+    <tr><td class="num">D9</td><td>摄像头拔出/占用时无处理（黑屏或崩溃风险）</td><td>长时间无人值守运行不可靠</td><td><span class="chip p1">P1</span></td></tr>
+  </tbody>
+</table>
+
+<h3>1.2 目标（可观察的结果）</h3>
+<ul>
+  <li>开启全部识别功能的情况下，预览依然<strong>实时、流畅、稳定</strong>，延迟与帧率不随运行时间劣化（量化指标见 <a href="#fr01">FR-01</a>）。</li>
+  <li>注册一次人脸，<strong>重启后依然有效</strong>；识别结果以人话呈现（"张三 92%"，而非内部数值）。</li>
+  <li>任何识别事件（人员识别、陌生人、遗留物、入侵）都会<strong>留下可查证的记录与截图</strong>。</li>
+  <li>画面上只出现<strong>有含义的标注</strong>，用户看到的每一个框都对应一条真实规则。</li>
+  <li>作为准商用软件的第一步：生物数据<strong>仅存本地、可知情、可删除</strong>。</li>
+</ul>
+
+<h2 id="analysis">2 需求分析</h2>
+<h3>2.1 用户与角色</h3>
+<table>
+  <thead><tr><th style="width:110px">角色</th><th>定义</th><th>核心诉求</th></tr></thead>
+  <tbody>
+    <tr><td><strong>操作员</strong><br><span class="sub">唯一使用者（v1）</span></td><td>店铺/工作室/家庭的管理者，在电脑前或定期回看</td><td>画面实时可信；事件不漏报、不误报；事后可查证</td></tr>
+    <tr><td><strong>数据主体</strong><br><span class="sub">被拍摄者</span></td><td>出现在画面中的人，含被注册人脸的员工/家人与陌生人</td><td>被采集生物信息前被告知；数据可被删除</td></tr>
+  </tbody>
+</table>
+<p>v1 为单机单管理员模式，无账户体系；多角色与远程访问不在本期范围（见 3.4 非目标）。</p>
+
+<h3>2.2 现状能力盘点</h3>
+<table>
+  <thead><tr><th>能力</th><th style="width:120px">现状</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>摄像头采集与预览</td><td>已实现，质量差</td><td>单路 USB（DirectShow）；延迟/卡顿（D1、D2）</td></tr>
+    <tr><td>人脸检测</td><td>已实现</td><td>经典级联检测器，可用作 v1 基线</td></tr>
+    <tr><td>人脸识别</td><td>部分实现</td><td>本地比对可用；置信度显示异常（D3）、库不持久（D6）</td></tr>
+    <tr><td>遗留物检测</td><td>部分实现</td><td>机制在，但误检严重（D4），无事件沉淀</td></tr>
+    <tr><td>禁区入侵检测</td><td>部分实现</td><td>机制在，但坐标映射错误（D5）</td></tr>
+    <tr><td>事件记录与存证</td><td><strong>缺失</strong></td><td>仅一行日志文本（D7）</td></tr>
+    <tr><td>设置持久化</td><td>部分实现</td><td>仅主题持久化</td></tr>
+    <tr><td>设备异常处理</td><td><strong>缺失</strong></td><td>无插拔/断流处理（D9）</td></tr>
+    <tr><td>多视频源</td><td><strong>缺失</strong></td><td>仅硬编码单路 USB；RTSP 接入属 Phase 2</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3 差距 → 需求推导</h3>
+<table>
+  <thead><tr><th>差距</th><th>推导出的需求</th></tr></thead>
+  <tbody>
+    <tr><td>延迟与卡顿（D1/D2）</td><td>识别计算与画面渲染解耦；过载时丢旧帧保最新帧（<a href="#fr01">FR-01</a>）</td></tr>
+    <tr><td>结果显示异常（D3/D4）</td><td>统一标注与数值口径，内部数值禁止外显（<a href="#fr08">FR-08</a>、<a href="#r1">R1</a>）</td></tr>
+    <tr><td>禁区错位（D5）</td><td>显示坐标与源帧坐标的统一映射规则（<a href="#fr06">FR-06</a>、<a href="#r3">R3</a>）</td></tr>
+    <tr><td>数据不持久（D6/D7）</td><td>人员档案库持久化（<a href="#fr04">FR-04</a>）+ 事件中心（<a href="#fr07">FR-07</a>）</td></tr>
+    <tr><td>准商用合规</td><td>生物数据本地化与同意/删除流程（<a href="#fr10">FR-10</a>）</td></tr>
+    <tr><td>硬件扩展路线</td><td>设备抽象层，新源以插件接入（<a href="#fr11">FR-11</a>），RTSP 为第一个插件（<a href="#fr12">FR-12</a>）</td></tr>
+  </tbody>
+</table>
+
+<h3>2.4 产品契约</h3>
+<table>
+  <thead><tr><th style="width:120px">要素</th><th>定义</th></tr></thead>
+  <tbody>
+    <tr><td>主要用户</td><td>小微场景的现场操作员（单管理员）</td></tr>
+    <tr><td>触发</td><td>启动软件，摄像头在线</td></tr>
+    <tr><td>核心任务</td><td>实时监看画面；系统自动识别人脸/遗留物/入侵并产生事件</td></tr>
+    <tr><td>完成条件</td><td>事件被<strong>检测 → 标注 → 记录（含截图）→ 可查证</strong>，四环全部成立</td></tr>
+    <tr><td>共享业务对象</td><td><strong>事件（Event）</strong>：所有识别能力的统一产出</td></tr>
+    <tr><td>信任基础</td><td>人脸数据本地处理与存储；注册前知情同意；一键清除</td></tr>
+  </tbody>
+</table>
+
+<h3>2.5 核心用户旅程（P0）</h3>
+<div class="flow">
+  <div class="step"><b>启动软件</b><span class="d">自动连接摄像头</span></div><div class="arr">→</div>
+  <div class="step"><b>实时预览</b><span class="d">满帧率，无累积延迟</span></div><div class="arr">→</div>
+  <div class="step"><b>开启识别</b><span class="d">人脸/遗留物/禁区</span></div><div class="arr">→</div>
+  <div class="step"><b>事件触发</b><span class="d">标注+提示+截图</span></div><div class="arr">→</div>
+  <div class="step"><b>事后查证</b><span class="d">事件列表+详情</span></div>
+</div>
+<p>恢复路径：任一环节失败（摄像头断开、识别关闭、重启软件）后，事件记录不丢失、设备自动恢复连接。</p>
+
+<h2 id="scope">3 范围与阶段</h2>
+<h3>3.1 Phase 1（P0，本期）—— 单路闭环</h3>
+<ul>
+  <li>入口条件：一台 USB 摄像头 + Windows 桌面。</li>
+  <li>P0 动作：低延迟预览管线（FR-01）、源管理（FR-02）、人脸识别（FR-03）、人员档案（FR-04）、遗留物检测（FR-05）、禁区入侵（FR-06）、事件中心（FR-07）、标注规范（FR-08）、设置持久化（FR-09）、隐私合规（FR-10）。</li>
+  <li>完成证据：24 小时无人值守运行后，事件记录完整可查，预览无劣化。</li>
+</ul>
+<h3>3.2 Phase 2（P1）—— 设备抽象与 RTSP</h3>
+<ul>
+  <li>设备抽象层（FR-11）：USB / RTSP / 文件回放统一接口，为运动相机、门锁预留插件位。</li>
+  <li>RTSP 网络摄像头接入（FR-12）：断流重连、网络抖动下"最新帧"策略。多路并发<span class="tbd">[TBD]</span>，本期先保证单路 RTSP 稳定。</li>
+</ul>
+<h3>3.3 Phase 3（P2，方向）—— 硬件联动</h3>
+<ul>
+  <li><strong>门锁人脸识别</strong>：识别通过 → 下发开锁指令 → 产生"开门事件"+ 抓拍存证。通信协议与门锁型号<span class="tbd">[TBD]</span>。</li>
+  <li><strong>运动相机接入</strong>：通过厂商 SDK 取流（候选品牌<span class="tbd">[TBD]</span>），复用 FR-11 插件机制，做便携/临时布防场景。</li>
+</ul>
+<h3>3.4 非目标（本期明确不做）</h3>
+<ul>
+  <li>云端存储、云端人脸库（合规与成本原因，生物数据不出本机）。</li>
+  <li>移动端 App、远程 Web 查看。</li>
+  <li>多用户账户体系与权限管理（单管理员即可完成 P0 旅程）。</li>
+  <li>目标检测模型（YOLO 类）替换现有检测器——列为技术演进备选，不作为本期需求约束。</li>
+</ul>
+
+<h2 id="model">4 产品模型</h2>
+<h3>4.1 对象模型</h3>
+<table>
+  <thead><tr><th style="width:130px">对象</th><th>定义</th><th>关键字段</th></tr></thead>
+  <tbody>
+    <tr><td><strong>人员档案</strong> Person</td><td>一个被注册的人，含 1..N 张人脸样本</td><td>档案名、样本列表、创建时间、状态（正常/已删除）</td></tr>
+    <tr><td><strong>视频源</strong> Source</td><td>一路视频输入（v1 仅 USB）</td><td>类型、设备标识、分辨率/帧率、连接状态</td></tr>
+    <tr><td><strong>禁区</strong> Zone</td><td>操作员在画面上划定的矩形告警区</td><td>矩形坐标（源帧坐标系）、启用状态</td></tr>
+    <tr><td><strong>事件</strong> Event</td><td>识别能力的统一产出，安防价值的载体</td><td>类型、时间、截图路径、关联档案/目标、来源</td></tr>
+    <tr><td><strong>告警提示</strong> Alert</td><td>事件在界面上的实时呈现（日志、角标、声音）</td><td>关联事件、呈现方式、是否已读</td></tr>
+  </tbody>
+</table>
+
+<h3>4.2 视频源连接状态机</h3>
+<table>
+  <thead><tr><th style="width:110px">当前状态</th><th>触发</th><th style="width:110px">下一状态</th><th>界面表现</th></tr></thead>
+  <tbody>
+    <tr><td>未连接</td><td>用户选择设备 / 启动自动连接</td><td>连接中</td><td>视频区占位提示</td></tr>
+    <tr><td>连接中</td><td>取流成功</td><td>在线</td><td>开始预览，状态条变绿</td></tr>
+    <tr><td>连接中</td><td>3 秒内失败</td><td>未连接</td><td>错误提示 + 重试按钮</td></tr>
+    <tr><td>在线</td><td>设备拔出 / 断流</td><td>重连中</td><td>画面冻结 + 黄色横幅"信号中断，正在重连"</td></tr>
+    <tr><td>重连中</td><td>恢复成功</td><td>在线</td><td>从最新帧继续（不回放中断帧）</td></tr>
+    <tr><td>重连中</td><td>连续 5 次失败</td><td>未连接</td><td>红色横幅 + 产生"源离线"事件</td></tr>
+  </tbody>
+</table>
+
+<h3>4.3 事件生命周期</h3>
+<table>
+  <thead><tr><th style="width:110px">状态</th><th>含义</th><th>流转</th></tr></thead>
+  <tbody>
+    <tr><td>活跃</td><td>刚触发，界面高亮提示（角标+日志+可选声音）</td><td>操作员查看详情 / 24h 后 → 归档</td></tr>
+    <tr><td>归档</td><td>仅存在于事件列表，不再提示</td><td>操作员删除 → 已删除（二次确认）</td></tr>
+    <tr><td>已删除</td><td>记录与截图一并清除</td><td>终态</td></tr>
+  </tbody>
+</table>
+
+<h3>4.4 主窗口布局（线框）</h3>
+<div class="wire">
+  <div class="win">
+    <div class="titlebar"><span>智能安防监控系统</span><span>— □ ✕</span></div>
+    <div class="body">
+      <div class="video">
+        实时画面（等比缩放，黑色留边）
+        <div class="hud">30 fps · 延迟 120ms · <b style="color:#34d399">● 在线</b></div>
+        <div class="fbox" style="top:70px;left:200px;width:70px;height:90px"><span class="tag">张三 92%</span></div>
+        <div class="track" style="top:60px;left:380px;width:46px;height:60px"></div>
+        <div class="sbox" style="top:40px;left:480px;width:120px;height:150px"><span class="tag">禁区</span></div>
+      </div>
+      <div class="panel"><span class="t">14:32:05</span> 识别到人员「张三」相似度 92%　|　<span class="t">14:31:58</span> 检测到陌生人　|　<span class="t">14:30:11</span> 禁区入侵告警（已存证）</div>
+      <div class="ctrl">
+        <div class="btn sec">切换主题</div><div class="btn">人脸识别：开</div><div class="btn sec">设置禁区</div><div class="btn sec">注册人脸</div><div class="btn" style="background:#b45309">事件中心 3</div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i style="border:2px solid #22c55e"></i>已识别人脸</span>
+    <span><i style="border:2px solid #eab308"></i>陌生人</span>
+    <span><i style="border:1.5px solid #6b7280"></i>跟踪中目标（低调）</span>
+    <span><i style="border:2px dashed #ef4444"></i>禁区</span>
+    <span><i style="background:#0f766e"></i>操作按钮</span>
+    <span><i style="background:#b45309"></i>事件中心（含未读数）</span>
+  </div>
+</div>
+
+<h2 id="fr">5 功能需求</h2>
+
+<div class="fr" id="fr01">
+  <div class="head"><span class="id">FR-01</span><span class="name">实时视频预览管线</span><span class="chip p0">P0</span></div>
+  <p><strong>目的</strong>：操作员看到的画面与现场同步——这是安防软件的合格线，也是 D1/D2 的直接解法。产品要求：识别计算再重，也不允许拖慢预览。</p>
+  <dl>
+    <dt>处理规则</dt>
+    <dd>采集、识别、渲染三个环节解耦执行，互不阻塞。</dd>
+    <dd><strong>丢帧策略（核心决策）</strong>：识别或渲染消费不及时时，丢弃旧帧、只处理/显示最新帧。宁可丢帧，不可累积延迟。</dd>
+    <dd>识别类处理允许降频运行（≥ 10 次/秒），预览渲染必须满帧。</dd>
+    <dt>量化指标（产品验收口径）</dt>
+    <dd>预览帧率 <span class="num">≥ 24 fps</span>（720p），识别全开时同样成立；波动 ≤ <span class="num">±2 fps</span>。</dd>
+    <dd>端到端延迟 <span class="num">≤ 250 ms</span>（标定方法：画面内秒表与系统时钟同框比对）。</dd>
+    <dd>连续运行 2 小时，延迟与内存不随时间增长。</dd>
+    <dt>异常</dt>
+    <dd>摄像头被其他程序占用：提示原因，每 3 秒自动重试，期间进入"未连接"空态。</dd>
+    <dd>启动时无摄像头：进入无源空态，识别类按钮置灰并给出引导文案。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr02">
+  <div class="head"><span class="id">FR-02</span><span class="name">视频源管理</span><span class="chip p0">P0</span></div>
+  <dl>
+    <dt>触发</dt><dd>启动自动连接默认设备；设置中可切换可用设备（下拉枚举本机摄像头）。</dd>
+    <dt>处理规则</dt>
+    <dd>暂停 = 画面冻结 + 角落显著"已暂停"水印；恢复时<strong>丢弃暂停期间积压的所有帧</strong>，从最新帧继续（修复 D8）。</dd>
+    <dd>默认请求 1280×720@30fps；设备不支持时取其最接近档位<span class="asm">[Assumption]</span>。</dd>
+    <dd>退出软件自动释放设备，不占用摄像头。</dd>
+    <dt>状态</dt><dd>连接状态机见 4.2。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr03">
+  <div class="head"><span class="id">FR-03</span><span class="name">人脸检测与识别</span><span class="chip p0">P0</span></div>
+  <dl>
+    <dt>触发</dt><dd>操作员开启"人脸识别"开关（默认关闭，记忆上次状态）。</dd>
+    <dt>处理规则</dt>
+    <dd>检测画面中人脸 → 与人员档案库比对 → 输出"档案名 + 相似度%"或"陌生人"。</dd>
+    <dd>相似度口径与阈值遵循 <a href="#r1">R1</a>；默认阈值 60%<span class="asm">[Assumption，可调 40–95]</span>。</dd>
+    <dd>人脸过小（短边 < 60px）不参与识别，避免远处误报。</dd>
+    <dd>低照度画面自动增强对比度后再检测。</dd>
+    <dt>结果与状态</dt>
+    <dd>识别命中 → 绿框 + 档案名 + 相似度%，产生"人员识别"事件（受 R2 冷却约束）。</dd>
+    <dd>未命中 → 黄框 + "陌生人"，产生"陌生人"事件（受 R2 冷却约束）。</dd>
+    <dt>异常</dt><dd>档案库为空：全部标"陌生人"，事件同样受冷却约束，不产生告警风暴。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr04">
+  <div class="head"><span class="id">FR-04</span><span class="name">人员档案与人脸库管理</span><span class="chip p0">P0</span></div>
+  <dl>
+    <dt>触发</dt><dd>点击"注册人脸"，从当前画面取最大的人脸。</dd>
+    <dt>处理规则</dt>
+    <dd>命名 → 质量校验（人脸过小/过暗拒绝并提示原因）→ 入库。</dd>
+    <dd>可向已有档案追加样本（同名即追加），提升识别稳定性。</dd>
+    <dd>首次注册弹出知情同意（见 <a href="#fr10">FR-10</a>），同意后方可继续。</dd>
+    <dt>结果与状态</dt>
+    <dd><strong>档案持久化</strong>：重启软件后全部档案与样本完整可用（修复 D6）。</dd>
+    <dd>删除档案：二次确认，物理删除其全部样本与特征数据。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr05">
+  <div class="head"><span class="id">FR-05</span><span class="name">遗留物检测</span><span class="chip p0">P0</span><span class="chip p2">默认关闭</span></div>
+  <dl>
+    <dt>触发</dt><dd>操作员手动开启（背景建模类算法在普通桌面场景误报率高，故默认关闭<span class="asm">[Assumption]</span>）。</dd>
+    <dt>处理规则</dt>
+    <dd>静止物体持续存在超过阈值（默认 60s，可调）→ 产生"遗留物"事件。</dd>
+    <dd>遗留物被移走 → 产生"遗留物解除"事件。</dd>
+    <dd><strong>标注纪律（修复 D4）</strong>：只有停留超过阈值、被确认为遗留物的目标才显示黄色告警框；仍在跟踪中的目标最多显示灰色细框，不喧宾夺主。</dd>
+    <dd>面积小于阈值的噪点不计入。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr06">
+  <div class="head"><span class="id">FR-06</span><span class="name">禁区入侵检测</span><span class="chip p0">P0</span></div>
+  <dl>
+    <dt>触发</dt><dd>点击"设置禁区"进入绘制模式，在<strong>视频画面上</strong>拖拽矩形；再次点击退出；可一键清除。</dd>
+    <dt>处理规则</dt>
+    <dd>绘制坐标按 <a href="#r3">R3</a> 映射到源帧坐标系（修复 D5）；窗口缩放/比例变化后判定依然准确。</dd>
+    <dd>目标（人脸或跟踪目标）进入禁区面积 ≥ 30% → 产生"入侵"事件，冷却期遵循 R2。</dd>
+    <dd>触发时红色标注 + 声音提示（声音默认开，可在设置关闭）。</dd>
+    <dt>结果与状态</dt><dd>禁区配置持久化，重启后恢复；画面常显红色虚线框。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr07">
+  <div class="head"><span class="id">FR-07</span><span class="name">事件与告警中心</span><span class="chip p0">P0</span></div>
+  <p><strong>目的</strong>：让"发生过什么"可追溯——安防产品从玩具变为工具的分界线（解法 D7）。</p>
+  <dl>
+    <dt>事件类型</dt>
+    <dd>人员识别 / 陌生人出现 / 遗留物 / 遗留物解除 / 禁区入侵 / 源离线。</dd>
+    <dt>处理规则</dt>
+    <dd>每个事件记录：类型、精确时间、<strong>标注后的截图存证</strong>（遵循 R4）、关联档案或目标描述。</dd>
+    <dd>界面呈现三通道：日志区滚动条目（现状保留）+ "事件中心"按钮角标未读数 + 可选声音。</dd>
+    <dd>事件中心：时间倒序列表 → 点击查看大图详情；支持按类型筛选。</dd>
+    <dt>持久化</dt><dd>事件与截图本地保存，重启可查；删除遵循 4.3 生命周期。</dd>
+    <dt>异常</dt><dd>磁盘写入失败：界面提示，识别功能不中断。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr08">
+  <div class="head"><span class="id">FR-08</span><span class="name">画面标注与渲染规范</span><span class="chip p0">P0</span></div>
+  <p><strong>目的</strong>：画面上的每一个框都有含义（解法 D3/D4）。规范全局唯一，见 4.4 线框图例：</p>
+  <table>
+    <thead><tr><th>含义</th><th>样式</th><th>文字</th></tr></thead>
+    <tbody>
+      <tr><td>已识别人脸</td><td>绿色实线框</td><td>档案名 + 相似度%（如"张三 92%"）</td></tr>
+      <tr><td>陌生人</td><td>黄色实线框</td><td>"陌生人"</td></tr>
+      <tr><td>跟踪中目标</td><td>灰色细线框（低调）</td><td>无文字</td></tr>
+      <tr><td>遗留物（已确认）</td><td>琥珀色实线框</td><td>"遗留物 N分钟"</td></tr>
+      <tr><td>禁区</td><td>红色虚线框</td><td>"禁区"</td></tr>
+      <tr><td>入侵目标</td><td>红色实线加粗框</td><td>"入侵"</td></tr>
+    </tbody>
+  </table>
+  <dl>
+    <dt>处理规则</dt>
+    <dd>置信度/相似度只以百分比呈现，<strong>内部数值（含异常值）永不渲染到画面</strong>（修复 D3）。</dd>
+    <dd>右上角常驻诊断小字：fps · 端到端延迟 · 源状态，可在设置中关闭。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr09">
+  <div class="head"><span class="id">FR-09</span><span class="name">系统设置与持久化</span><span class="chip p0">P0</span></div>
+  <table>
+    <thead><tr><th>设置项</th><th style="width:130px">默认值</th><th>生效方式</th></tr></thead>
+    <tbody>
+      <tr><td>主题（深/浅）</td><td>深色</td><td>即时生效，已持久化（现状保留）</td></tr>
+      <tr><td>摄像头设备</td><td>系统默认</td><td>切换后重连</td></tr>
+      <tr><td>相似度阈值</td><td>60%</td><td>即时生效</td></tr>
+      <tr><td>遗留物时长阈值</td><td>60 秒</td><td>即时生效</td></tr>
+      <tr><td>告警声音</td><td>开</td><td>即时生效</td></tr>
+      <tr><td>诊断信息显示</td><td>开</td><td>即时生效</td></tr>
+      <tr><td>事件截图存证</td><td>开</td><td>即时生效（关闭后事件仍记录，仅无截图）</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="fr" id="fr10">
+  <div class="head"><span class="id">FR-10</span><span class="name">敏感数据处理与隐私（准商用门槛）</span><span class="chip p0">P0</span></div>
+  <p>人脸图像属于敏感生物特征信息，准商用定位下以下规则为硬性要求：</p>
+  <dl>
+    <dt>知情同意</dt><dd>首次注册人脸时弹窗告知：采集内容、存储位置（本机）、用途（仅本地识别）、删除方式；同意后方可入库。已注册用户不受影响。</dd>
+    <dt>本地化</dt><dd>人脸数据、事件记录、截图仅保存在本机，软件无任何网络上传行为（RTSP 拉流除外，且仅指向用户自己配置的设备）。</dd>
+    <dt>可删除</dt><dd>删除档案即物理删除其生物数据；设置中提供"一键清除全部生物数据"，二次确认后执行。</dd>
+    <dt>留存边界</dt><dd>事件截图默认保留<span class="tbd">[TBD：建议 30 天自动清理]</span>；日志不记录人脸图像本体。</dd>
+    <dt>交付物</dt><dd>随软件提供简版隐私说明<span class="tbd">[TBD：是否需要独立文档与法务评审]</span>。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr11">
+  <div class="head"><span class="id">FR-11</span><span class="name">设备抽象层（为硬件路线铺路）</span><span class="chip p1">P1</span></div>
+  <dl>
+    <dt>目的</dt><dd>让"运动相机 / 门锁 / 网络摄像头"以插件方式接入，而非各自为政——这是三条硬件路线的共同地基。</dd>
+    <dt>处理规则</dt>
+    <dd>统一源接口：取流、启停、连接状态上报、能力描述（分辨率/帧率）；上层功能（识别、事件）对源类型无感知。</dd>
+    <dd>v1 内部先把 USB 源重构到该抽象之上（Phase 1 顺带完成），Phase 2 增加 RTSP 实现，Phase 3 增加门锁/运动相机实现。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr12">
+  <div class="head"><span class="id">FR-12</span><span class="name">RTSP 网络摄像头接入</span><span class="chip p1">P1</span></div>
+  <dl>
+    <dt>触发</dt><dd>操作员添加网络摄像头（URL + 可选凭据）。</dd>
+    <dt>处理规则</dt>
+    <dd>断流自动重连（指数退避：1s/2s/4s/…/上限 30s）；重连成功产生"源恢复"记录。</dd>
+    <dd>网络抖动导致积压时，执行与 FR-01 相同的"丢旧帧保最新"策略。</dd>
+    <dd>本期单路 RTSP；多路并发与通道管理<span class="tbd">[TBD]</span>。</dd>
+  </dl>
+</div>
+
+<h2 id="shared">6 共享规则（全局唯一口径）</h2>
+<table>
+  <thead><tr><th style="width:70px">编号</th><th style="width:150px">规则</th><th>定义</th></tr></thead>
+  <tbody>
+    <tr id="r1"><td class="num">R1</td><td>相似度口径</td><td>对外统一为 <strong>0–100%，越高越相似</strong>。内部算法无论以何种距离/误差度量，一律转换后再呈现；异常或无结果时显示"—"，禁止渲染内部数值（修复 D3 的机制保障）。</td></tr>
+    <tr id="r2"><td class="num">R2</td><td>事件冷却</td><td>同类型 + 同目标的事件在冷却窗口内合并为一条：<strong>人员识别/陌生人 30s</strong>，<strong>入侵 10s</strong>，遗留物状态变化不冷却。冷却只合并事件，不抑制画面标注。</td></tr>
+    <tr id="r3"><td class="num">R3</td><td>坐标映射</td><td>显示坐标 ↔ 源帧坐标换算统一实现：等比缩放 + 居中留边（letterbox）偏移补偿。禁区绘制、标注绘制、点击交互全部经此规则，任何模块不得自行换算。</td></tr>
+    <tr id="r4"><td class="num">R4</td><td>截图存证</td><td>事件触发瞬间保存<strong>标注后的画面帧</strong>，按 <code>事件目录/日期/时分秒_类型.png</code> 命名；设置中可关闭（FR-09）。</td></tr>
+    <tr id="r5"><td class="num">R5</td><td>权限</td><td>v1 单管理员：操作员拥有全部操作权；数据主体的知情与删除权通过操作员执行（FR-10 承载）。无其他角色。</td></tr>
+  </tbody>
+</table>
+
+<h2 id="open">7 开放问题</h2>
+<table>
+  <thead><tr><th style="width:70px">编号</th><th>问题</th><th>影响</th></tr></thead>
+  <tbody>
+    <tr><td class="num">Q1</td><td><span class="tbd">[TBD]</span> 授权/激活机制：试用 + 买断激活码，还是完全免费内测？</td><td>准商用交付形态</td></tr>
+    <tr><td class="num">Q2</td><td><span class="tbd">[TBD]</span> RTSP 接入是否需要 ONVIF 自动发现，或手填 URL 即可？优先支持哪些摄像头品牌？</td><td>FR-12 范围</td></tr>
+    <tr><td class="num">Q3</td><td><span class="tbd">[TBD]</span> 门锁硬件型号与通信协议（Wi-Fi/蓝牙/串口）？</td><td>Phase 3 门锁路线可行性</td></tr>
+    <tr><td class="num">Q4</td><td><span class="tbd">[TBD]</span> 运动相机候选品牌（GoPro / DJI / Insta360）与其 SDK 取流能力确认。</td><td>Phase 3 运动相机路线</td></tr>
+    <tr><td class="num">Q5</td><td><span class="tbd">[TBD]</span> 性能指标的最低硬件基线（建议：近 4 年 4 核 CPU + 集显，720p 摄像头）。</td><td>FR-01 验收环境</td></tr>
+    <tr><td class="num">Q6</td><td><span class="tbd">[TBD]</span> 事件截图保留时长（建议 30 天自动清理）与隐私说明文档是否需要独立法务评审。</td><td>FR-10 合规边界</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  PRD v1.0 · 智能安防监控系统 · 2026-10-17 · 状态：评审中<br>
+  证据来源：现场截图（2026-10）、源码走查（src/app 全量）、操作员反馈（延迟大、卡顿、14–30fps）
+</footer>
+</main>
+</div>
+</body>
+</html>
