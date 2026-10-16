@@ -8,7 +8,7 @@
 #include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
-{   
+{
     // 初始化设置
     _settings = new QSettings("sys_param.ini", QSettings::IniFormat, this);
     _currentTheme = _settings->value("Theme/current", "dark").toString();
@@ -21,31 +21,71 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     initUI();
     applyTheme(_currentTheme);
 
-    // 启动视频采集线程
-    _captureThread = new VideoCaptureThread(this);
-    connect(_captureThread, &VideoCaptureThread::frameCaptured, this, [this](cv::Mat frame) {
-        frame.copyTo(_lastFrame);
-        
-        // 处理帧数据
-        std::vector<cv::Rect> faces;
-        if (_faceRecognizer) {
-            _faceRecognizer->processFrame(frame);
-            faces = _faceRecognizer->getLastDetectedFaces();
-        }
-        
-        if (_objectDetector) {
-            _objectDetector->processFrame(frame);
-        }
-        
-        if (_intrusionDetector && _intrusionDetector->isZoneActive()) {
-            _intrusionDetector->processFrame(frame, faces);
-        }
-        
-        // 转换为QImage并显示
-        QImage image(frame.data, frame.cols, frame.rows, frame.step, QImage::Format_BGR888);
-        updateVideoFrame(image);
+    // ===== 异步识别管线（FR-01）=====
+    // 跨线程队列信号的自定义类型必须先注册
+    qRegisterMetaType<AnalysisResult>("AnalysisResult");
+    qRegisterMetaType<cv::Rect>("cv::Rect");
+
+    _frameBank = new FrameBank;
+
+    // 采集线程：摄像头 → FrameBank（覆盖式写入，永不阻塞）
+    _captureThread = new VideoCaptureThread(_frameBank, this);
+    connect(_captureThread, &VideoCaptureThread::fpsChanged, this, [this](int fps) {
+        Q_UNUSED(fps) // 采集帧率仅用于日志；预览实际帧率由渲染节拍统计
     });
+
+    // 分析线程：FrameBank 最新帧 → 识别 → 结构化结果（队列信号回 GUI）
+    _analysisThread = new AnalysisThread(_frameBank, _faceRecognizer, _objectDetector, _intrusionDetector, this);
+    connect(_analysisThread, &AnalysisThread::analysisReady, this, &MainWindow::onAnalysisReady);
+    _analysisThread->start(QThread::LowPriority);   // 低于 GUI 优先级，重计算不影响界面响应
+
+    // 渲染节拍器：GUI 只做轻量绘制，30fps 定时从 FrameBank 取最新帧
+    _renderTimer = new QTimer(this);
+    connect(_renderTimer, &QTimer::timeout, this, &MainWindow::renderTick);
+    _renderTimer->start(33);
+
+    _renderClock.start();
     _captureThread->startCapture(0);
+}
+
+void MainWindow::renderTick()
+{
+    cv::Mat frame = _frameBank->load();
+    if (frame.empty())
+        return;                 // 无新帧（暂停/断流）→ 保持上一画面
+    _lastFrame = frame;         // 引用计数拷贝（只读，注册人脸用）
+
+    // 实际预览渲染帧率统计（FR-08 诊断角标）
+    ++_renderFrameCount;
+    qint64 elapsed = _renderClock.elapsed();
+    if (elapsed >= 1000) {
+        QMutexLocker locker(&_resultMutex);
+        _hud.renderFps = qRound(_renderFrameCount * 1000.0 / elapsed);
+        _renderFrameCount = 0;
+        _renderClock.restart();
+    }
+
+    // 渲染要修改像素，必须持有私有副本（见 FrameBank 头注释的像素竞争说明）
+    cv::Mat draw = frame.clone();
+
+    AnalysisResult result;
+    {
+        QMutexLocker locker(&_resultMutex);
+        result = _lastResult;
+    }
+    const cv::Rect zone = _intrusionDetector->zone();
+
+    QImage image(draw.data, draw.cols, draw.rows, draw.step, QImage::Format_BGR888);
+    OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
+    updateVideoFrame(image);
+}
+
+void MainWindow::onAnalysisReady(const AnalysisResult& result)
+{
+    QMutexLocker locker(&_resultMutex);
+    _lastResult = result;       // 覆盖式：渲染永远用最新结果
+    _hud.analysisFps = result.analysisFps;
+    _hud.processMs = result.processMs;
 }
 
 MainWindow::~MainWindow()
@@ -123,6 +163,7 @@ void MainWindow::initUI()
         if (!_lastFrame.empty()) {
             cv::Mat gray;
             cv::cvtColor(_lastFrame, gray, cv::COLOR_BGR2GRAY);
+            cv::equalizeHist(gray, gray);   // 均衡化由调用方负责（与 analyze 路径一致）
             
             // 检测人脸
             std::vector<cv::Rect> faces;
@@ -242,11 +283,16 @@ void MainWindow::saveThemeConfig()
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
-{   
-    // 有实例资源和运行状态下 才存在关闭逻辑
-    if (_captureThread && _captureThread->isRunning()) {  
-        _captureThread->requestInterruption();
-        _captureThread->wait();
+{
+    // 关闭顺序：先停渲染节拍 → 停分析线程 → 停采集线程（自释放设备）
+    if (_renderTimer)
+        _renderTimer->stop();
+    if (_analysisThread && _analysisThread->isRunning()) {
+        _analysisThread->shutdown();
+        _analysisThread->wait(2000);
+    }
+    if (_captureThread && _captureThread->isRunning()) {
+        _captureThread->stopCapture();
     }
     event->accept();
 }

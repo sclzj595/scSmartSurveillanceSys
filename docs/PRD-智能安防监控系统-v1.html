@@ -111,7 +111,8 @@
   <a href="#model">4 产品模型</a>
   <a href="#fr">5 功能需求</a>
   <a href="#shared">6 共享规则</a>
-  <a href="#open">7 开放问题</a>
+  <a href="#impl">7 技术实施方案：异步识别管线</a>
+  <a href="#open">8 开放问题</a>
 </nav>
 <main>
 
@@ -488,7 +489,60 @@
   </tbody>
 </table>
 
-<h2 id="open">7 开放问题</h2>
+<h2 id="impl">7 技术实施方案：异步识别管线（已落地，2026-10-17）</h2>
+<p>本节是 <a href="#fr01">FR-01</a> 的技术实施记录，应用了三个经典并发设计模式，直接消除 D1/D2。</p>
+
+<h3>7.1 线程模型与数据流</h3>
+<pre style="background:var(--gray-soft);padding:14px;border-radius:8px;font-family:var(--mono);font-size:12px;line-height:1.6;overflow-x:auto">
+[采集线程 VideoCaptureThread]
+  摄像头取流 (CAP_DSHOW, ~30fps)
+        │ store() 覆盖写入，永不阻塞
+        ▼
+[FrameBank 最新帧槽]  ◄── 背压基元：只保留最新帧，旧帧自然丢弃
+        │ waitForNew() 按新帧到达唤醒          │ QTimer 33ms 定时 load()
+        ▼                                      ▼
+[分析线程 AnalysisThread]               [GUI 线程]
+  Active Object，≤25Hz 自适应节流         只做轻量绘制：
+  HAAR人脸 → LBPH识别 → MOG2 → 禁区       clone → QPainter叠加标注 → QLabel
+        │ emit analysisReady(结构化结果)   （cv::putText → QPainter，顺带修复中文乱码）
+        ▼ 队列信号（QWaitCondition 阻塞等待，无忙轮询）
+  MainWindow 缓存最新结果（覆盖式）
+</pre>
+
+<h3>7.2 应用的设计模式</h3>
+<table>
+  <thead><tr><th style="width:170px">模式</th><th>解决的问题</th><th>落点</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Latest-Frame Slot</strong><br><span class="sub">最新帧槽（有界缓冲退化为单槽）</span></td><td>背压控制：生产快于消费时，排队会累积延迟（原缺陷 D1 的根因——Qt 队列连接不合并，GUI 慢一帧事件就堆一层）。单槽覆盖语义使延迟上界 = 单帧处理耗时，<strong>不随运行时间增长</strong></td><td><code>FrameBank</code></td></tr>
+    <tr><td><strong>Active Object</strong><br><span class="sub">活动对象</span></td><td>重计算与调用方解耦：识别管线拥有独立线程与调度节律，对外仅暴露异步接口；处理慢时自动跳帧到最新帧（消费端感知不到）</td><td><code>AnalysisThread</code></td></tr>
+    <tr><td><strong>数据/呈现分离</strong><br><span class="sub">Detection ≠ Rendering</span></td><td>检测线程只产出结构化结果（FR-08 标注规范的数据载体），绘制全部收敛到 GUI 侧 <code>OverlayRenderer</code>（QPainter）。附带收益：标注文字支持中文；画面标注永远叠加在<strong>最新帧</strong>而非"分析时刻的帧"</td><td><code>AnalysisTypes.h</code> + <code>OverlayRenderer</code></td></tr>
+  </tbody>
+</table>
+
+<h3>7.3 关键决策记录</h3>
+<table>
+  <thead><tr><th>决策</th><th>选择 A</th><th>选择 B</th><th>结论</th></tr></thead>
+  <tbody>
+    <tr><td>帧传递方式</td><td>Qt 队列信号逐帧推送</td><td><strong>FrameBank 最新帧槽 + 消费端定时拉取</strong></td><td>选 B：队列信号不可合并，是延迟累积的根因；拉取模型天然背压</td></tr>
+    <tr><td>渲染节拍</td><td>跟随采集信号（30Hz 事件）</td><td><strong>GUI QTimer 33ms 主动拉取</strong></td><td>选 B：渲染节律与采集解耦，无帧时空转跳过，暂停恢复零积压</td></tr>
+    <tr><td>识别频率</td><td>跟随采集（30Hz）</td><td><strong>上限 25Hz 节流 + 自适应跳帧</strong></td><td>选 B：满足 FR-01"≥10次/秒"约束的同时显著省 CPU</td></tr>
+    <tr><td>标注绘制</td><td>cv::putText 在分析线程画</td><td><strong>QPainter 在 GUI 渲染节拍画</strong></td><td>选 B：满帧预览（标注不拖帧率）+ 中文可渲染 + 像素竞争清晰（改像素必须 clone）</td></tr>
+    <tr><td>线程优先级</td><td>默认</td><td><strong>分析线程 LowPriority</strong></td><td>选 B：识别重载时 OS 优先调度 GUI，界面不卡</td></tr>
+  </tbody>
+</table>
+
+<h3>7.4 顺带修复的工程缺陷</h3>
+<ul>
+  <li><strong>设备释放竞态</strong>：原 <code>stopCapture()</code> 在 wait(500ms) 后于 GUI 线程调 <code>_cap.release()</code>，若采集线程仍在取流会并发访问崩溃。现改为设备释放在采集线程自己的退出路径完成。</li>
+  <li><strong>暂停回放旧帧（D8）</strong>：暂停期间采集线程持续 <code>grab()</code> 丢弃缓冲，恢复即最新画面。</li>
+  <li><strong>注册/识别数据竞争</strong>：人脸库（样本、标签）注册（GUI）与预测（分析线程）并发访问，补 <code>QMutex</code> 互斥。</li>
+  <li><strong>跨线程类型注册</strong>：队列信号的自定义类型 <code>AnalysisResult</code>/<code>cv::Rect</code> 完成 <code>qRegisterMetaType</code>，消除"Cannot queue arguments"静默丢包风险。</li>
+</ul>
+
+<h3>7.5 验收口径（对应 FR-01 指标）</h3>
+<p>诊断角标（画面右上角，FR-08）实时显示：预览 fps / 分析 Hz / 单帧分析耗时。验收时观察：识别全开 → 预览 ≥24fps、延迟 ≤250ms（秒表同框法）、2 小时数值不漂移。</p>
+
+<h2 id="open">8 开放问题</h2>
 <table>
   <thead><tr><th style="width:70px">编号</th><th>问题</th><th>影响</th></tr></thead>
   <tbody>

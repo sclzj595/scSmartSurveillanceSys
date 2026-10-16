@@ -15,22 +15,23 @@ ObjectDetection::ObjectDetection(QObject *parent) : QObject(parent)
     qInfo() << "Background subtractor initialized";
 }
 
-void ObjectDetection::processFrame(const cv::Mat &frame)
+void ObjectDetection::analyze(const cv::Mat &frame, std::vector<TrackedObjectResult>& out)
 {
+    out.clear();
     if (frame.empty()) return;
-    
+
     cv::Mat fgMask;
     _pBackgroundSubtractor->apply(frame, fgMask);
-    
+
     // 形态学操作去除噪声
     cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
     cv::morphologyEx(fgMask, fgMask, cv::MORPH_OPEN, kernel);
     cv::dilate(fgMask, fgMask, kernel);
-    
+
     // 查找轮廓
     std::vector<std::vector<cv::Point>> contours;
     cv::findContours(fgMask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-    
+
     QMutexLocker locker(&_mutex);
     qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
     
@@ -91,17 +92,12 @@ void ObjectDetection::processFrame(const cv::Mat &frame)
         }
     }
     
-    // 在图像上绘制静止物体
+    // 输出结构化结果（绘制由 GUI 线程 OverlayRenderer 承担）
     for (const auto& obj : _stillObjects) {
-        cv::Rect rect = obj.second.second;
-        qint64 duration = currentTime - obj.second.first;
-        
-        if (duration > _timeThreshold) {
-            cv::rectangle(frame, rect, cv::Scalar(0, 255, 255), 3); // 黄色警告
-            cv::putText(frame, "LEFT OBJECT", cv::Point(rect.x, rect.y-10),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 255), 2);
-        } else {
-            cv::rectangle(frame, rect, cv::Scalar(255, 255, 0), 2); // 青色物体
-        }
+        TrackedObjectResult r;
+        r.rect = obj.second.second;
+        r.durationMs = currentTime - obj.second.first;
+        r.confirmedLeft = r.durationMs > _timeThreshold;
+        out.push_back(r);
     }
 }

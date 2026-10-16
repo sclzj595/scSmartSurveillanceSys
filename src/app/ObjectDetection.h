@@ -9,19 +9,23 @@
 #include <map>
 #include <QMutex>
 #include <QDateTime>
+#include "AnalysisTypes.h"
 
 class ObjectDetection : public QObject
 {
     Q_OBJECT
 public:
     explicit ObjectDetection(QObject *parent = nullptr);
-    void processFrame(const cv::Mat &frame);
+
+    // 纯分析：更新背景模型与静止物体状态，输出结构化结果，不做任何绘制
+    // 仅在分析线程调用
+    void analyze(const cv::Mat &frame, std::vector<TrackedObjectResult>& out);
 
 signals:
     void objectLeftDetected(const cv::Rect &position);
 
 private:
-    cv::Ptr<cv::BackgroundSubtractorMOG2> _pBackgroundSubtractor; // 修改为具体类型
+    cv::Ptr<cv::BackgroundSubtractorMOG2> _pBackgroundSubtractor;
     std::map<int, std::pair<qint64, cv::Rect>> _stillObjects;
     int _nextObjectId = 0;
     QMutex _mutex;

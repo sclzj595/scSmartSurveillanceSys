@@ -100,58 +100,66 @@ FaceRecognition::FaceRecognition(QObject *parent) : QObject(parent)
 
 FaceRecognition::~FaceRecognition() {}
 
-void FaceRecognition::detectFaces(cv::Mat &gray, std::vector<cv::Rect> &faces) {
-    if(_faceCascade.empty()) return;
-    
-    // 直方图均衡化提高对比度
-    cv::equalizeHist(gray, gray);
-    
-    // 多尺度检测人脸
-    _faceCascade.detectMultiScale(gray, faces, 1.1, 3, 0, cv::Size(60, 60));
-    
-    // 存储最新检测结果
-    _lastFaces = faces;
+// L2 距离 → 0~100% 相似度（R1 口径：越高越相似；无效结果显示 -1，界面呈现"—"）
+static double similarityFromDistance(double dist)
+{
+    if (dist >= 1.0e15)
+        return -1.0;                 // 无样本/无效结果（predict 返回 DBL_MAX）
+    double sim = 100.0 - dist;       // LBPH L2 距离经验范围 0~100+
+    return std::max(0.0, std::min(100.0, sim));
 }
 
-void FaceRecognition::processFrame(cv::Mat& frame) {
+void FaceRecognition::detectFaces(cv::Mat &gray, std::vector<cv::Rect> &faces) {
+    if(_faceCascade.empty()) return;
+
+    // 多尺度检测人脸（直方图均衡化由调用方负责）
+    _faceCascade.detectMultiScale(gray, faces, 1.1, 3, 0, cv::Size(60, 60));
+}
+
+void FaceRecognition::analyze(const cv::Mat& frame, std::vector<FaceResult>& out) {
+    out.clear();
     if(_faceCascade.empty() || !_enabled) return;
-    
+
+    QMutexLocker locker(&_mutex);
+
     cv::Mat gray;
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
     cv::equalizeHist(gray, gray);
 
     std::vector<cv::Rect> faces;
     detectFaces(gray, faces);
-    
+
     for(const cv::Rect& faceRect : faces) {
-        cv::Mat faceROI = gray(faceRect);
-        cv::Mat processedFace;
-        cv::resize(faceROI, processedFace, _faceSize);
-        
-        int label = -1;
-        double confidence = 0.0;
-        _recognizer.predict(processedFace, label, confidence);
-        
-        QString name = "Unknown";
-        if(confidence < DataConfig::faceConfidenceThreshold() && 
-           _labelMap.find(label) != _labelMap.end()) {
-            name = _labelMap[label];
+        FaceResult fr;
+        fr.rect = faceRect;
+        fr.similarity = -1.0;
+
+        // 人脸过小不参与识别，避免远处误报（FR-03）
+        if(faceRect.width >= 60 && faceRect.height >= 60) {
+            cv::Mat faceROI = gray(faceRect);
+            cv::Mat processedFace;
+            cv::resize(faceROI, processedFace, _faceSize);
+
+            int label = -1;
+            double confidence = 0.0;
+            _recognizer.predict(processedFace, label, confidence);
+
+            fr.similarity = similarityFromDistance(confidence);
+            if(confidence <= DataConfig::faceConfidenceThreshold() &&
+               _labelMap.find(label) != _labelMap.end()) {
+                fr.known = true;
+                fr.name = _labelMap[label];
+            }
         }
-        
-        // 绘制人脸矩形和识别结果
-        cv::rectangle(frame, faceRect, cv::Scalar(0, 255, 0), 2);
-        cv::putText(frame, name.toStdString(), 
-                    cv::Point(faceRect.x, faceRect.y - 10),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 255, 0), 2);
-        cv::putText(frame, QString::number(confidence, 'f', 2).toStdString(), 
-                    cv::Point(faceRect.x, faceRect.y + faceRect.height + 20),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 1);
-        
-        emit faceRecognized(name, confidence);
+
+        out.push_back(fr);
+        emit faceRecognized(fr.known ? fr.name : QString("陌生人"), fr.similarity);
     }
 }
 
 void FaceRecognition::registerFace(const cv::Mat& face, const QString& name) {
+    QMutexLocker locker(&_mutex);   // 与分析线程的 predict/train 互斥
+
     cv::Mat processedFace;
     if(face.channels() > 1) {
         cv::cvtColor(face, processedFace, cv::COLOR_BGR2GRAY);
