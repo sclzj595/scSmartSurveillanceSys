@@ -15,6 +15,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QWaitCondition>
+#include <QDateTime>
 #include <opencv2/core.hpp>
 
 class FrameBank
@@ -25,6 +26,7 @@ public:
         {
             QMutexLocker locker(&_mutex);
             _frame = std::move(frame);
+            _storedMs = QDateTime::currentMSecsSinceEpoch();
             ++_version;
         }
         _cond.wakeAll();
@@ -34,6 +36,13 @@ public:
     {
         QMutexLocker locker(&_mutex);
         return _frame;
+    }
+
+    // 帧龄：当前帧从采集到现在经过的毫秒数（实时性指标，FR-01 / 5.2）
+    qint64 ageMs() const
+    {
+        QMutexLocker locker(&_mutex);
+        return _frame.empty() ? -1 : QDateTime::currentMSecsSinceEpoch() - _storedMs;
     }
 
     bool empty() const
@@ -61,6 +70,7 @@ private:
     mutable QMutex _mutex;
     QWaitCondition _cond;
     cv::Mat _frame;
+    qint64 _storedMs = 0;
     int _version = 0;
 };
 

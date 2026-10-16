@@ -54,6 +54,7 @@ void MainWindow::renderTick()
     if (frame.empty())
         return;                 // 无新帧（暂停/断流）→ 保持上一画面
     _lastFrame = frame;         // 引用计数拷贝（只读，注册人脸用）
+    const qint64 frameAgeMs = _frameBank->ageMs();  // 帧龄须在 load 后立刻取，晚了不准
 
     // 实际预览渲染帧率统计（FR-08 诊断角标）
     ++_renderFrameCount;
@@ -76,6 +77,7 @@ void MainWindow::renderTick()
     const cv::Rect zone = _intrusionDetector->zone();
 
     QImage image(draw.data, draw.cols, draw.rows, draw.step, QImage::Format_BGR888);
+    _hud.latencyMs = frameAgeMs;
     OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
     updateVideoFrame(image);
 }

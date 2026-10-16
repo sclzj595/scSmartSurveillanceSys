@@ -94,12 +94,16 @@ void OverlayRenderer::paint(QImage& img,
                    QStringLiteral("入侵告警!"));
     }
 
-    // 诊断角标（FR-08）：预览fps · 分析Hz · 分析耗时
+    // 诊断角标（FR-08）：预览fps · 分析Hz · 分析耗时 · 帧龄（延迟）
     if (hud.show) {
-        const QString txt = QStringLiteral("预览 %1fps · 分析 %2Hz · %3ms")
+        const QString latency = hud.latencyMs >= 0
+            ? QStringLiteral("%1ms").arg(hud.latencyMs)
+            : QStringLiteral("—");
+        const QString txt = QStringLiteral("预览 %1fps · 分析 %2Hz · %3ms · 延迟 %4")
                                 .arg(hud.renderFps)
                                 .arg(hud.analysisFps)
-                                .arg(hud.processMs);
+                                .arg(hud.processMs)
+                                .arg(latency);
         QFont f = p.font();
         f.setPointSize(10);
         f.setBold(false);

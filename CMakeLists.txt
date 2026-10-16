@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(SmartSurveillance)
 
+# 默认 Release（MinGW Makefiles 留空 = -O0，CV 像素循环慢 3-5 倍，会直接导致识别卡顿）
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # 设置输出目录为build/bin
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
