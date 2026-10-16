@@ -1,0 +1,32 @@
+# ===== 构建产物 =====
+build/
+build_success_first/
+bin/
+*.o
+*.obj
+*.exe
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.autosave
+CMakeLists.txt.user
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# ===== 第三方 SDK（~100MB，另行下载，不入库）=====
+# OpenCV 4.5.2 MinGW 版：https://opencv.org/releases/ 解压到 utils/opencv4_5_2
+utils/
+
+# ===== Python 原型（2022114027谢攀-.../qmzy）垃圾目录 =====
+**/venv/
+**/__pycache__/
+**/.idea/
+*.pyc
+
+# ===== IDE =====
+.vscode/
+
+# ===== 系统文件 =====
+Thumbs.db
+Desktop.ini

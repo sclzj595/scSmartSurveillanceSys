@@ -1,0 +1,31 @@
+#ifndef OBJECTDETECTION_H
+#define OBJECTDETECTION_H
+
+#pragma execution_character_set("utf-8")
+
+#include "dataConfig.h"
+#include <QObject>
+#include <opencv2/opencv.hpp>
+#include <map>
+#include <QMutex>
+#include <QDateTime>
+
+class ObjectDetection : public QObject
+{
+    Q_OBJECT
+public:
+    explicit ObjectDetection(QObject *parent = nullptr);
+    void processFrame(const cv::Mat &frame);
+
+signals:
+    void objectLeftDetected(const cv::Rect &position);
+
+private:
+    cv::Ptr<cv::BackgroundSubtractorMOG2> _pBackgroundSubtractor; // 修改为具体类型
+    std::map<int, std::pair<qint64, cv::Rect>> _stillObjects;
+    int _nextObjectId = 0;
+    QMutex _mutex;
+    const double _timeThreshold = 10000; // 10秒阈值
+};
+
+#endif  // OBJECTDETECTION_H
