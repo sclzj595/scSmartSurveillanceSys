@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRD v2.0 · 智能视觉平台（智能安防监控系统）</title>
+<style>
+  :root{
+    --bg:#fafafa; --paper:#ffffff; --ink:#18181b; --ink-2:#52525b; --ink-3:#a1a1aa;
+    --line:#e4e4e7; --accent:#0f766e; --accent-soft:#f0fdfa; --accent-line:#99f6e4;
+    --red:#dc2626; --red-soft:#fef2f2; --amber:#d97706; --amber-soft:#fffbeb;
+    --gray-soft:#f4f4f5;
+    --mono:ui-monospace,'Cascadia Mono','Source Code Pro',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.75}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex;max-width:1240px;margin:0 auto;gap:32px;padding:0 24px}
+  nav{width:230px;flex-shrink:0;position:sticky;top:0;align-self:flex-start;height:100vh;overflow-y:auto;padding:36px 0 40px;font-size:13px}
+  nav .brand{font-weight:700;font-size:15px;margin-bottom:4px}
+  nav .ver{color:var(--ink-3);font-size:12px;margin-bottom:20px;font-family:var(--mono)}
+  nav a{display:block;color:var(--ink-2);padding:3px 10px;border-left:2px solid transparent}
+  nav a:hover{color:var(--accent);border-left-color:var(--accent-line);text-decoration:none;background:var(--accent-soft)}
+  nav .grp{margin:14px 0 4px;padding-left:10px;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.08em}
+  main{flex:1;min-width:0;max-width:880px;padding:36px 0 120px}
+  h1{font-size:28px;line-height:1.3;margin-bottom:6px;letter-spacing:-.01em}
+  h2{font-size:20px;margin:52px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--line);letter-spacing:-.01em}
+  h3{font-size:16px;margin:30px 0 10px}
+  p{margin:8px 0}
+  ul,ol{padding-left:22px;margin:8px 0}
+  li{margin:3px 0}
+  code{font-family:var(--mono);font-size:12.5px;background:var(--gray-soft);padding:1px 6px;border-radius:4px;color:#7c2d12}
+  strong{font-weight:600}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 8px}
+  .chip{font-size:12px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2);background:var(--paper)}
+  .chip.p0{background:var(--red-soft);border-color:#fecaca;color:var(--red);font-weight:600}
+  .chip.p1{background:var(--amber-soft);border-color:#fde68a;color:var(--amber);font-weight:600}
+  .chip.p2{background:var(--gray-soft);border-color:#d4d4d8;color:var(--ink-2);font-weight:600}
+  .chip.teal{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent)}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--paper);border-radius:0 8px 8px 0;padding:12px 16px;margin:14px 0;color:var(--ink-2)}
+  .callout.warn{border-left-color:var(--amber)}
+  .callout b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px;background:var(--paper)}
+  th{background:var(--gray-soft);text-align:left;font-weight:600;color:var(--ink-2)}
+  th,td{border:1px solid var(--line);padding:7px 10px;vertical-align:top}
+  tbody tr:hover{background:#fcfcfd}
+  td .sub{color:var(--ink-3);font-size:12px}
+  pre.arch{background:#1c1c1f;color:#d4d4d8;padding:16px;border-radius:8px;font-family:var(--mono);font-size:12px;line-height:1.65;overflow-x:auto}
+  pre.arch .hl{color:#5eead4;font-weight:700}
+  .ok{color:#059669;font-weight:600}
+  .part{color:#d97706;font-weight:600}
+  .tbd{color:var(--amber);font-weight:600}
+  .asm{color:var(--accent);font-weight:600}
+  .num{font-family:var(--mono)}
+  .layer{border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:14px 18px;margin:12px 0}
+  .layer .t{font-weight:700;margin-bottom:4px}
+  .layer .t .tag{font-size:11px;padding:1px 8px;border-radius:999px;margin-left:8px;vertical-align:2px}
+  .tag.core{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line)}
+  .tag.biz{background:var(--red-soft);color:var(--red);border:1px solid #fecaca}
+  .tag.eco{background:var(--amber-soft);color:var(--amber);border:1px solid #fde68a}
+  footer{border-top:1px solid var(--line);margin-top:60px;padding-top:16px;color:var(--ink-3);font-size:12px}
+  @media print{ nav{display:none} .wrap{display:block;padding:0} main{padding:0;max-width:none} body{font-size:12px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <div class="brand">智能视觉平台</div>
+  <div class="ver">PRD v2.0 · 评审中</div>
+  <div class="grp">文档</div>
+  <a href="#c1">1 定位·愿景·路线</a>
+  <a href="#c2">2 现状盘点</a>
+  <a href="#c3">3 角色·场景·优先级</a>
+  <a href="#c4">4 总体架构与边界</a>
+  <a href="#c5">5 视频采集与实时性</a>
+  <a href="#c6">6 识别引擎与结果规范</a>
+  <a href="#c7">7 设备管理与硬件接入</a>
+  <a href="#c8">8 事件·告警·历史</a>
+  <a href="#c9">9 多端协同</a>
+  <a href="#c10">10 存储·隐私·安全</a>
+  <a href="#c11">11 性能与稳定性</a>
+  <a href="#c12">12 阶段计划与验收</a>
+  <a href="#c13">13 Git 版本管理</a>
+</nav>
+<main>
+
+<h1 id="top">智能视觉平台 · 产品需求文档 v2.0</h1>
+<div class="meta">
+  <span class="chip teal">v2.0（取代 v1.0）</span>
+  <span class="chip">2026-10-17</span>
+  <span class="chip">状态：评审中</span>
+  <span class="chip">前序：<a href="PRD-智能安防监控系统-v1.html">v1.0 单机闭环版</a></span>
+</div>
+<p>v1.0 定义了单机安防闭环并落地了异步识别管线。v2.0 将视野升级为<strong>以机器视觉为核心的智能视觉平台</strong>：把"视觉引擎共性能力"与"安防业务规则"分离，使后续接入 RTSP、移动端、运动相机、门锁时<strong>不需要推翻重做</strong>。单机安防闭环降级为平台上的第一个业务应用。</p>
+<div class="callout">
+  <b>阅读指引</b>：第 4 章是本文档的锚点——模块边界一旦确定，各章需求都挂在边界内。<span class="ok">✅</span> = 已落地（含代码），<span class="part">◐</span> = 部分完成，⬜ = 未开始。
+</div>
+
+<h2 id="c1">1 产品定位、愿景与演进路线</h2>
+<h3>1.1 定位</h3>
+<p><strong>以机器视觉为核心的智能视觉平台</strong>：统一的视频接入、低延迟帧调度、识别引擎、事件系统，向上支撑多个业务应用（安防监控是第一个），向下适配多种视频源与硬件（USB / RTSP / 运动相机 / 门锁），并向多端（桌面、移动）开放同一套业务能力。</p>
+<h3>1.2 愿景与演进路线</h3>
+<table>
+  <thead><tr><th style="width:90px">阶段</th><th>形态</th><th>关键能力</th><th style="width:90px">状态</th></tr></thead>
+  <tbody>
+    <tr><td><strong>S1 桌面单机</strong></td><td>Qt 桌面应用</td><td>USB 源 + 视觉引擎 + 安防业务闭环 + 事件系统</td><td><span class="part">◐ 进行中</span></td></tr>
+    <tr><td><strong>S1.5 设备抽象</strong></td><td>同上</td><td>源抽象层落地，RTSP 接入，为多源多端铺路</td><td>⬜</td></tr>
+    <tr><td><strong>S2 多端协同</strong></td><td>桌面 + 移动端</td><td>事件/状态实时推送（WebSocket），移动端查看与控制，远程视频链路评估</td><td>⬜</td></tr>
+    <tr><td><strong>S3 硬件生态</strong></td><td>平台 + 硬件插件</td><td>运动相机 SDK 接入；授权门锁的人脸识别开锁联动</td><td>⬜</td></tr>
+  </tbody>
+</table>
+<h3>1.3 架构总原则</h3>
+<ul>
+  <li>桌面客户端是<strong>当前的主要操作端</strong>，但不成为识别能力的唯一载体——引擎与业务运行在桌面进程内的分层模块中，接口按"可拆出为独立服务"的边界设计，未来拆分时客户端零重写。</li>
+  <li><strong>采集、视觉分析、事件管理、设备控制四域有清晰边界</strong>（第 4 章），新增手机端与硬件时只在边界处扩展。</li>
+  <li>传输通道按数据类型选择，<strong>不默认用 WebSocket 传视频</strong>（第 5.3 矩阵）。</li>
+  <li>移动端 = 共享业务状态与控制能力，<strong>不是把 Qt 界面搬上手机</strong>（第 9 章）。</li>
+</ul>
+
+<h2 id="c2">2 现有系统能力盘点及技术问题分析</h2>
+<p>承接 v1.0 缺陷清单 D1–D9 与 2026-10-17 异步管线重构成果。</p>
+<h3>2.1 缺陷处置状态</h3>
+<table>
+  <thead><tr><th style="width:60px">编号</th><th>问题</th><th style="width:110px">处置</th><th>去向</th></tr></thead>
+  <tbody>
+    <tr><td class="num">D1</td><td>延迟随运行时间累积</td><td class="ok">✅ 已修复</td><td>FrameBank 最新帧槽（5.1）</td></tr>
+    <tr><td class="num">D2</td><td>14–30fps 波动卡顿</td><td class="ok">✅ 已修复</td><td>GUI 卸载 CV 计算，渲染节拍器（5.1）</td></tr>
+    <tr><td class="num">D3</td><td>DBL_MAX 内部数值外显</td><td class="ok">✅ 已修复</td><td>R1 相似度口径 + 数据/呈现分离</td></tr>
+    <tr><td class="num">D4</td><td>MOG2 误检框泛滥</td><td class="ok">✅ 已修复</td><td>FR-08 标注纪律（仅确认遗留物上框）</td></tr>
+    <tr><td class="num">D5</td><td>禁区坐标与画面错位</td><td><span class="part">◐ 未修</span></td><td>R3 统一坐标映射，V0.5</td></tr>
+    <tr><td class="num">D6</td><td>人脸档案重启丢失</td><td>⬜</td><td>FR-04 档案持久化，V0.5</td></tr>
+    <tr><td class="num">D7</td><td>事件无持久化与存证</td><td>⬜</td><td>FR-07 事件中心，V0.4</td></tr>
+    <tr><td class="num">D8</td><td>暂停恢复回放旧帧</td><td class="ok">✅ 已修复</td><td>采集暂停期 grab() 丢帧</td></tr>
+    <tr><td class="num">D9</td><td>设备拔出/占用无处理</td><td>⬜</td><td>源状态机（7.2），V0.6</td></tr>
+  </tbody>
+</table>
+<h3>2.2 已具备的技术资产</h3>
+<ul>
+  <li><strong>异步识别管线</strong>：采集线程 → FrameBank → 分析线程（25Hz 自适应跳帧）→ GUI 渲染节拍（30fps）。GUI 线程零 CV 计算。</li>
+  <li><strong>结构化结果通道</strong>：AnalysisResult（人脸/遗留物/入侵）跨线程传递，检测与渲染解耦。</li>
+  <li><strong>诊断角标</strong>：预览 fps / 分析 Hz / 单帧耗时实时显示（5.2 指标体系的基础）。</li>
+  <li><strong>算法基线</strong>：HAAR 人脸检测、LBPH 识别、MOG2 背景建模、禁区判定。</li>
+</ul>
+
+<h2 id="c3">3 用户角色、使用场景与需求优先级</h2>
+<table>
+  <thead><tr><th style="width:110px">角色</th><th>定义</th><th>出现的阶段</th></tr></thead>
+  <tbody>
+    <tr><td><strong>操作员</strong></td><td>店铺/工作室/家庭管理者，桌面端全功能使用者</td><td>S1 起</td></tr>
+    <tr><td><strong>查看者</strong></td><td>同一场所的协作者，移动端查看画面/收告警/开关识别</td><td>S2 起</td></tr>
+    <tr><td><strong>数据主体</strong></td><td>被拍摄者；知情与删除权通过操作员执行</td><td>S1 起</td></tr>
+  </tbody>
+</table>
+<h3>3.1 核心场景</h3>
+<table>
+  <thead><tr><th>场景</th><th>描述</th><th>依赖能力</th></tr></thead>
+  <tbody>
+    <tr><td><strong>店内看店</strong></td><td>USB 摄像头常开，人脸识别+禁区+遗留物，事后查证</td><td>S1 全量</td></tr>
+    <tr><td><strong>远程探店</strong></td><td>店主外出，手机看实时画面、收入侵推送、远程开关识别</td><td>RTSP（S1.5）+ 移动端（S2）</td></tr>
+    <tr><td><strong>便携布防</strong></td><td>运动相机架在临时场地（展位/仓库），即插即用识别</td><td>运动相机 SDK（S3）</td></tr>
+    <tr><td><strong>门口门禁</strong></td><td>门口摄像头识别授权人员 → 联动门锁开锁 → 开门事件存证</td><td>门锁接口（S3）+ 档案库</td></tr>
+  </tbody>
+</table>
+<h3>3.2 优先级总纲</h3>
+<table>
+  <thead><tr><th style="width:130px">层级</th><th>内容</th><th style="width:70px">优先级</th></tr></thead>
+  <tbody>
+    <tr><td><strong>机器视觉核心</strong></td><td>统一视频输入、低延迟帧调度、识别引擎、跟踪、标注、性能诊断、规则判定</td><td><span class="chip p0">P0</span></td></tr>
+    <tr><td><strong>安防业务闭环</strong></td><td>人员档案、遗留物、禁区、事件存证、历史查询、告警、设备恢复</td><td><span class="chip p0">P0</span>/<span class="chip p1">P1</span></td></tr>
+    <tr><td><strong>多端与硬件生态</strong></td><td>RTSP、移动端、消息通道、远程视频、运动相机、门锁联动</td><td><span class="chip p1">P1</span>/<span class="chip p2">P2</span></td></tr>
+  </tbody>
+</table>
+
+<h2 id="c4">4 产品总体架构及模块边界</h2>
+<h3>4.1 分层架构</h3>
+<pre class="arch">
+┌─────────────────────────── 客户端层 ───────────────────────────┐
+│  <span class="hl">Qt 桌面端</span>（主操作端：全功能）      <span class="hl">移动端</span>（查看与控制）        │
+│     预览渲染 · 标注叠加 · 业务操作界面        画面查看 · 告警接收 · 开关/规则/历史        │
+└───────────────△───────────────────────────────△───────────────┘
+                │ 统一业务接口（进程内调用；S2 起暴露为消息/API）           │
+┌───────────────┴───────────────┐   ┌──────────────────────────┴───────┐
+│      <span class="hl">统一业务服务层</span>             │   │        本地存储                    │
+│  事件与告警 · 设备与规则管理      │   │  事件记录与截图（文件+元数据）        │
+│  历史记录与存证 · 硬件控制与审计  │   │  人员档案与特征 · 系统设置           │
+└───────────────△───────────────┘   └────────────────────────────────┘
+                │ 检测/跟踪结果（结构化） · 控制指令
+┌───────────────┴──────────────────────────────────────────────────┐
+│                  <span class="hl">统一视频与机器视觉引擎</span>                             │
+│     视频采集 · 帧调度（FrameBank）· 检测 · 识别 · 目标跟踪 · 标注    │
+└───────────────△──────────────────────────────────────────────────┘
+                │ 统一源接口（取流/启停/状态/能力）
+┌───────────────┴──────────────────────────────────────────────────┐
+│                        <span class="hl">设备接入层</span>                                  │
+│   USB 摄像头 ✅   │   RTSP 网络摄像头   │   运动相机 SDK   │   门锁接口   │
+└──────────────────────────────────────────────────────────────────┘
+</pre>
+<h3>4.2 模块边界规则（不可违背）</h3>
+<table>
+  <thead><tr><th style="width:170px">边界</th><th>规则</th><th>违反的后果</th></tr></thead>
+  <tbody>
+    <tr><td>引擎 ↔ 业务</td><td>引擎只产出<strong>结构化结果</strong>（帧龄、目标、相似度），不感知"禁区/遗留物"等安防概念；规则判定在业务层</td><td>换一个视觉应用（如运动相机场景）就要改引擎</td></tr>
+    <tr><td>业务 ↔ 客户端</td><td>客户端只经统一业务接口读写事件/档案/规则/设备状态，不直接触达引擎内部与存储格式</td><td>移动端接入时桌面逻辑重复开发</td></tr>
+    <tr><td>源 ↔ 引擎</td><td>引擎经<strong>统一源接口</strong>取流，对 USB/RTSP/SDK 源类型无感知（FR-11）</td><td>每加一种硬件就复制一条管线</td></tr>
+    <tr><td>渲染 ↔ 分析</td><td>检测线程不绘制；标注由渲染端按结构化结果绘制（已落地）</td><td>识别重载拖垮帧率（D2 复发）</td></tr>
+  </tbody>
+</table>
+<h3>4.3 能力归属表（共性 vs 业务）</h3>
+<table>
+  <thead><tr><th>能力</th><th style="width:130px">归属</th><th>理由</th></tr></thead>
+  <tbody>
+    <tr><td>帧调度 / 背压 / 丢帧策略</td><td><span class="tag core">引擎</span></td><td>与业务无关的实时性基座</td></tr>
+    <tr><td>人脸检测/识别、目标跟踪、背景建模</td><td><span class="tag core">引擎</span></td><td>通用视觉算法</td></tr>
+    <tr><td>标注渲染（FR-08 样式）</td><td><span class="tag core">引擎</span></td><td>结果呈现规范，所有应用复用</td></tr>
+    <tr><td>禁区判定、遗留物规则、告警冷却</td><td><span class="tag biz">安防业务</span></td><td>场景规则，不进引擎</td></tr>
+    <tr><td>人员档案、事件存证、隐私流程</td><td><span class="tag biz">安防业务</span></td><td>业务对象与合规</td></tr>
+    <tr><td>门锁控制、运动相机取流</td><td><span class="tag eco">硬件插件</span></td><td>设备接入层扩展，经源/设备接口进平台</td></tr>
+    <tr><td>消息推送、移动端同步</td><td><span class="tag eco">协同层</span></td><td>S2 引入，业务服务层暴露</td></tr>
+  </tbody>
+</table>
+
+<h2 id="c5">5 视频采集、处理与实时性要求</h2>
+<h3>5.1 管线模型（已落地）</h3>
+<pre class="arch">
+[采集线程] --store(覆盖)--> [<span class="hl">FrameBank 最新帧槽</span>] --waitForNew--> [分析线程 ≤25Hz 自适应跳帧]
+                                  │                                │ 结构化 AnalysisResult
+                                  │ QTimer 33ms load()             ▼（队列信号）
+                                  └────────> [GUI 渲染节拍 30fps] 缓存最新结果
+                                                 │ clone → QPainter 标注 → QLabel
+背压语义：延迟上界 = 单帧处理耗时，不随运行时间累积（D1 根治）
+</pre>
+<h3>5.2 实时性指标体系（先测量，再改代码）</h3>
+<table>
+  <thead><tr><th>指标</th><th>定义</th><th style="width:170px">验收口径（720p）</th><th style="width:90px">现状</th></tr></thead>
+  <tbody>
+    <tr><td>采集帧率</td><td>摄像头实际交付帧率</td><td class="num">≥ 25 fps</td><td><span class="part">◐ 可测未记录</span></td></tr>
+    <tr><td>渲染帧率</td><td>窗口实际显示帧率</td><td class="num">≥ 24 fps，波动 ≤ ±2</td><td><span class="part">◐ 角标已有</span></td></tr>
+    <tr><td>识别耗时</td><td>单次分析耗时（含 P95）</td><td class="num">P95 ≤ 120 ms</td><td><span class="part">◐ 均值已有</span></td></tr>
+    <tr><td><strong>帧龄</strong></td><td>显示画面距采集的时长</td><td class="num">≤ 250 ms</td><td>⬜（V0.2 补测量）</td></tr>
+    <tr><td>队列积压</td><td>待处理帧数/最旧帧年龄</td><td>恒为 0（单槽覆盖语义）</td><td class="ok">✅ 结构性保证</td></tr>
+    <tr><td>长稳</td><td>2h 连续运行指标与内存</td><td>无漂移、无泄漏</td><td>⬜（V0.2 验收）</td></tr>
+  </tbody>
+</table>
+<div class="callout warn"><b>V0.2 专项诊断清单</b>（管线重构后复测）：① 仅预览不识别的基线帧率 → ② 逐项开启人脸/遗留物/禁区的增量耗时 → ③ 帧龄实测（秒表同框法）→ ④ 2h 长稳内存曲线。结果记录进 <a href="#c13">第 13 章</a>变更记录，作为 perf 提交的证据。</div>
+<h3>5.3 传输通道矩阵（按数据类型选择，视频不走 WebSocket）</h3>
+<table>
+  <thead><tr><th>数据类型</th><th>通道</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>实时视频（本机显示）</td><td><strong>进程内直连</strong>（现状）</td><td>零拷贝路径，无需网络栈</td></tr>
+    <tr><td>实时视频（远程预览，S2）</td><td><strong>WebRTC（评估项）</strong></td><td>低延迟视频独立链路；不评估成功不强行上</td></tr>
+    <tr><td>RTSP 原始视频（S1.5）</td><td><strong>RTSP 拉流</strong></td><td>网络摄像头标准接入</td></tr>
+    <tr><td>识别结果 / 告警 / 设备状态（S2）</td><td><strong>WebSocket 推送</strong></td><td>实时消息通道</td></tr>
+    <tr><td>设备控制 / 识别开关 / 禁区配置（S2）</td><td>HTTP API 或 WebSocket</td><td>操作信令</td></tr>
+    <tr><td>历史事件 / 档案 / 设置</td><td>本地存储 + 统一业务接口</td><td>查询与持久化</td></tr>
+    <tr><td>截图与存证</td><td>本地文件 + 元数据接口</td><td>回放与证据查看</td></tr>
+  </tbody>
+</table>
+
+<h2 id="c6">6 机器视觉算法与识别结果规范</h2>
+<h3>6.1 算法基线与演进</h3>
+<table>
+  <thead><tr><th>能力</th><th>当前算法</th><th>演进方向（不约束本期）</th></tr></thead>
+  <tbody>
+    <tr><td>人脸检测</td><td>HAAR 级联</td><td>YOLO/MediaPipe 类检测器（引擎接口不变，可替换）</td></tr>
+    <tr><td>人脸识别</td><td>LBPH（L2 距离）</td><td>深度特征（ArcFace 类）+ 特征库</td></tr>
+    <tr><td>运动目标</td><td>MOG2 背景建模</td><td>光流/检测器级联跟踪</td></tr>
+    <tr><td>目标跟踪</td><td>重叠匹配（简版）</td><td>IoU/卡尔曼 级跟踪器</td></tr>
+  </tbody>
+</table>
+<h3>6.2 结构化结果规范（已落地，引擎出口契约）</h3>
+<pre class="arch">
+AnalysisResult {
+  faces[]     : { rect, name, similarity(0~100|-1), known }   // R1 口径
+  objects[]   : { rect, durationMs, confirmedLeft }            // 遗留物
+  intrusion   : { active, offenders[] }                        // 禁区（业务判定，引擎外）
+  processMs / analysisFps                                      // 诊断
+}
+</pre>
+<ul>
+  <li>相似度口径 <strong>R1</strong>：对外一律 0–100%（越高越相似），无结果显示"—"，内部数值/异常值永不渲染。</li>
+  <li>标注规范 <strong>FR-08</strong>：绿=已识别、黄=陌生人、灰细=跟踪中、琥珀=遗留物、红虚线=禁区、红粗=入侵；中文经 QPainter 渲染。</li>
+  <li>识别频率约束：≥ 10 次/秒（当前上限 25Hz 节流 + 跳帧）。</li>
+</ul>
+
+<h2 id="c7">7 设备管理与硬件接入规范</h2>
+<h3>7.1 统一源接口（FR-11，S1.5 核心）</h3>
+<table>
+  <thead><tr><th>接口能力</th><th>语义</th><th>USB</th><th>RTSP</th><th>运动相机</th><th>门锁</th></tr></thead>
+  <tbody>
+    <tr><td>取流</td><td>按需交付最新帧</td><td>✅</td><td>⬜</td><td>⬜ SDK</td><td>—（不取流）</td></tr>
+    <tr><td>启停控制</td><td>打开/关闭/暂停</td><td>✅</td><td>⬜</td><td>⬜</td><td>⬜ 控制类</td></tr>
+    <tr><td>状态上报</td><td>连接状态机（7.2）</td><td><span class="part">◐</span></td><td>⬜</td><td>⬜</td><td>⬜</td></tr>
+    <tr><td>能力描述</td><td>分辨率/帧率档位</td><td><span class="part">◐</span></td><td>⬜</td><td>⬜</td><td>—</td></tr>
+  </tbody>
+</table>
+<p>门锁是<strong>控制型设备</strong>而非视频源：只提供"开锁指令 + 状态回报"，人脸识别仍由视频源侧引擎完成，识别通过 → 业务层审计授权 → 下发开锁 → 产生"开门事件+抓拍存证"。门锁型号与通信协议 <span class="tbd">[TBD：Q3]</span>。</p>
+<h3>7.2 视频源连接状态机（继承 v1 4.2，V0.6 落地 D9）</h3>
+<p>未连接 → 连接中（3s 超时回退）→ 在线 →（拔出/断流）重连中（指数退避 1s→30s 上限，恢复后从最新帧继续）→ 连续 5 次失败回到未连接并产生"源离线"事件。恢复后<strong>不回放中断帧</strong>。</p>
+<h3>7.3 RTSP 接入要求（FR-12，S1.5）</h3>
+<ul>
+  <li>添加方式：URL + 可选凭据；凭据不入 Git（第 10 章）。ONVIF 自动发现 <span class="tbd">[TBD：Q2]</span>。</li>
+  <li>网络抖动积压时执行与 5.1 相同的丢帧保最新策略；断流重连按 7.2 状态机。</li>
+  <li>本期单路 RTSP 稳定优先；多路并发 <span class="tbd">[TBD]</span>。</li>
+</ul>
+
+<h2 id="c8">8 事件、告警与历史记录系统</h2>
+<h3>8.1 事件模型（业务层统一产出，继承 FR-07）</h3>
+<table>
+  <thead><tr><th>事件类型</th><th>触发条件</th><th>冷却（R2）</th><th>存证（R4）</th></tr></thead>
+  <tbody>
+    <tr><td>人员识别</td><td>命中档案</td><td>同目标 30s</td><td>标注帧截图</td></tr>
+    <tr><td>陌生人出现</td><td>未命中且人脸≥阈值</td><td>同目标 30s</td><td>标注帧截图</td></tr>
+    <tr><td>遗留物 / 解除</td><td>静止超阈值 / 被移走</td><td>不冷却（状态变化）</td><td>标注帧截图</td></tr>
+    <tr><td>禁区入侵</td><td>目标进入禁区≥30%面积</td><td>同目标 10s</td><td>标注帧截图</td></tr>
+    <tr><td>源离线 / 恢复</td><td>状态机 7.2 转移</td><td>—</td><td>—</td></tr>
+    <tr><td>开门事件（S3）</td><td>识别通过→开锁成功</td><td>—</td><td>抓拍 + 审计日志</td></tr>
+  </tbody>
+</table>
+<h3>8.2 事件生命周期</h3>
+<p>活跃（界面提示：日志+角标+可选声音）→ 24h 自动归档 → 操作员删除（二次确认，记录与截图一并清除）。磁盘写入失败只提示，不中断识别。</p>
+<h3>8.3 历史查询（V0.4 起）</h3>
+<p>按时间倒序 + 类型筛选；点击查看大图详情。数据量级按"单机 30 天留存"设计，留存时长 <span class="tbd">[TBD：Q6，建议 30 天自动清理]</span>。</p>
+
+<h2 id="c9">9 桌面端、移动端与实时消息协同（S2）</h2>
+<h3>9.1 多端能力矩阵（共享业务状态，非界面搬运）</h3>
+<table>
+  <thead><tr><th>能力</th><th>桌面端</th><th>移动端</th><th>说明</th></tr></thead>
+  <tbody>
+    <tr><td>实时画面查看</td><td>✅ 主画面（本机直连）</td><td>✅ 远程预览（WebRTC 评估）</td><td>视频不走 WebSocket（5.3）</td></tr>
+    <tr><td>识别开关 / 阈值调整</td><td>✅</td><td>✅</td><td>控制信令通道</td></tr>
+    <tr><td>禁区设置 / 档案注册</td><td>✅</td><td>⬜（复杂操作留在桌面）</td><td>绘制与采样依赖桌面交互</td></tr>
+    <tr><td>事件接收 / 历史查询</td><td>✅</td><td>✅ 推送 + 列表</td><td>WebSocket + 业务接口</td></tr>
+    <tr><td>设备调试 / 高级配置</td><td>✅</td><td>⬜</td><td>桌面优先</td></tr>
+  </tbody>
+</table>
+<h3>9.2 实时消息基础（V0.7 起）</h3>
+<ul>
+  <li>桌面端进程内业务服务暴露消息通道：事件产生 → 推送订阅端（移动端/未来其他客户端）。</li>
+  <li>消息内容：事件摘要（类型/时间/截图引用）、设备状态变更、设置变更通知。</li>
+  <li>断线重连后按"最新状态快照 + 增量推送"对齐，不回放历史消息。</li>
+</ul>
+
+<h2 id="c10">10 本地存储、隐私、安全及设备控制</h2>
+<h3>10.1 存储分区（全部本机，无云端）</h3>
+<table>
+  <thead><tr><th>数据</th><th>载体</th><th>留存</th></tr></thead>
+  <tbody>
+    <tr><td>事件记录 + 截图存证</td><td>事件目录（按日期）+ 元数据</td><td><span class="tbd">[TBD：Q6 建议 30 天]</span></td></tr>
+    <tr><td>人员档案与特征样本</td><td>档案库（V0.5 持久化，修 D6）</td><td>直至删除</td></tr>
+    <tr><td>系统设置 / 禁区配置</td><td>配置文件</td><td>直至修改</td></tr>
+    <tr><td>RTSP 凭据</td><td>配置文件（不入 Git）</td><td>直至修改</td></tr>
+    <tr><td>设备控制审计（S3）</td><td>审计日志（开锁：时间/档案/结果）</td><td><span class="tbd">[TBD]</span></td></tr>
+  </tbody>
+</table>
+<h3>10.2 隐私硬规则（继承 FR-10）</h3>
+<ul>
+  <li>生物数据仅存本机、无网络上传（RTSP 拉流仅指向用户自配设备）。</li>
+  <li>首次注册弹窗知情同意；删除档案即物理删除生物数据；提供"一键清除全部生物数据"。</li>
+  <li>日志不记录人脸图像本体。</li>
+</ul>
+
+<h2 id="c11">11 性能、稳定性与故障恢复要求</h2>
+<table>
+  <thead><tr><th>类别</th><th>要求</th><th style="width:90px">版本</th></tr></thead>
+  <tbody>
+    <tr><td>实时性</td><td>5.2 指标体系全项达标；性能改动必须附前后测量数据（13 章）</td><td>持续</td></tr>
+    <tr><td>长稳</td><td>24h 无人值守：无内存泄漏、无指标漂移、事件完整可查</td><td>V0.4 起每版验收</td></tr>
+    <tr><td>设备恢复</td><td>源状态机 7.2 全覆盖：占用/拔出/断流均有界面反馈与自动恢复路径（修 D9）</td><td>V0.6</td></tr>
+    <tr><td>数据可靠</td><td>存储失败降级（提示但不中断识别）；进程退出释放设备不占用摄像头</td><td>V0.4</td></tr>
+    <tr><td>回退</td><td>任一版本可回退到上一个基线标签（13 章）</td><td>持续</td></tr>
+  </tbody>
+</table>
+
+<h2 id="c12">12 分阶段开发计划、验收标准及开放问题</h2>
+<h3>12.1 版本路线与验收证据</h3>
+<table>
+  <thead><tr><th style="width:80px">版本</th><th>目标</th><th>验收证据</th><th style="width:90px">状态</th></tr></thead>
+  <tbody>
+    <tr><td class="num">V0.1</td><td>基线与构建验证</td><td>标签 <code>v0.1.0-baseline</code></td><td class="ok">✅</td></tr>
+    <tr><td class="num">V0.2</td><td>视频性能专项诊断</td><td>5.2 指标实测记录 + 2h 长稳曲线（写入 13 章变更记录）</td><td><span class="part">◐ 角标已就绪</span></td></tr>
+    <tr><td class="num">V0.3</td><td>最新帧调度与线程优化</td><td>帧龄 ≤250ms 实测；运行验证后打 <code>v0.2.0-pipeline</code></td><td><span class="part">◐ 代码已落地</span></td></tr>
+    <tr><td class="num">V0.4</td><td>事件持久化与截图存证</td><td>重启后事件可查、截图在盘；24h 长稳通过</td><td>⬜</td></tr>
+    <tr><td class="num">V0.5</td><td>档案持久化 + 禁区可靠性</td><td>重启档案完整（修 D6）；缩放窗口禁区判定准确（修 D5/R3）</td><td>⬜</td></tr>
+    <tr><td class="num">V0.6</td><td>设备统一接口</td><td>USB 迁移至源抽象；拔插自动恢复（修 D9）；RTSP 单路接入</td><td>⬜</td></tr>
+    <tr><td class="num">V0.7</td><td>实时消息与远程协同基础</td><td>事件可推送至外部订阅端；消息通道有快照+增量语义</td><td>⬜</td></tr>
+    <tr><td class="num">S2/S3</td><td>移动端 / 运动相机 / 门锁</td><td>按 9.1 矩阵与 7.1 接口逐项验收</td><td>⬜</td></tr>
+  </tbody>
+</table>
+<h3>12.2 开放问题</h3>
+<table>
+  <thead><tr><th style="width:60px">编号</th><th>问题</th><th>影响</th></tr></thead>
+  <tbody>
+    <tr><td class="num">Q1</td><td><span class="tbd">[TBD]</span> 授权/激活机制（试用+激活码 or 免费内测）</td><td>准商用交付</td></tr>
+    <tr><td class="num">Q2</td><td><span class="tbd">[TBD]</span> RTSP 是否需要 ONVIF 发现；优先支持品牌</td><td>V0.6 范围</td></tr>
+    <tr><td class="num">Q3</td><td><span class="tbd">[TBD]</span> 门锁型号与通信协议</td><td>S3 门锁路线</td></tr>
+    <tr><td class="num">Q4</td><td><span class="tbd">[TBD]</span> 运动相机品牌候选与 SDK 取流能力确认</td><td>S3 便携路线</td></tr>
+    <tr><td class="num">Q5</td><td><span class="tbd">[TBD]</span> 最低硬件基线（建议近 4 年 4 核 + 集显，720p）</td><td>验收环境</td></tr>
+    <tr><td class="num">Q6</td><td><span class="tbd">[TBD]</span> 截图留存时长；隐私说明是否独立法务评审</td><td>8/10 章边界</td></tr>
+    <tr><td class="num">Q7</td><td><span class="tbd">[TBD]</span> S2 远程视频：WebRTC 评估结论（自建 SFU vs P2P vs 放弃远程视频仅推送告警）</td><td>移动端形态</td></tr>
+    <tr><td class="num">Q8</td><td><span class="tbd">[TBD]</span> 引擎是否拆出独立服务进程（当前进程内分层已满足，拆分触发条件需定义）</td><td>S2/S3 架构</td></tr>
+  </tbody>
+</table>
+
+<h2 id="c13">13 Git 版本管理、发布基线和变更记录</h2>
+<p>操作规范见 <a href="git相关.md">docs/git相关.md</a>（分支模型 / 提交规范 / 标签规则 / 回退路径）。要点：</p>
+<ul>
+  <li><code>main</code> 永远可编译可运行；perf 提交必须附前后测量数据。</li>
+  <li>标签只打在<strong>运行验证过</strong>的提交上；当前基线 <code>v0.1.0-baseline</code>（8fd24e8）。</li>
+  <li>每版本收尾：验证 → 打标 → 更新路线状态 → 推送。</li>
+</ul>
+<h3>13.1 变更记录</h3>
+<table>
+  <thead><tr><th style="width:110px">日期</th><th style="width:110px">提交/标签</th><th>内容与证据</th></tr></thead>
+  <tbody>
+    <tr><td>2026-10-17</td><td class="num"><code>8fd24e8</code> <code>v0.1.0-baseline</code></td><td>课程版基线：三模块功能完整、已运行验证；记录 D1–D9 缺陷清单</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>0c9a0d7</code></td><td>PRD v1.0（单机闭环版）</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>a647f6d</code></td><td><strong>perf/refactor</strong>：异步识别管线（FrameBank/ActiveObject/数据呈现分离）。证据：编译通过；帧龄与长稳实测 <span class="tbd">[待 V0.2/V0.3 补录]</span></td></tr>
+    <tr><td>2026-10-17</td><td>本次提交</td><td>PRD v2.0（平台架构版）+ 版本管理方案落地 + 基线打标</td></tr>
+  </tbody>
+</table>
+
+<footer>
+  PRD v2.0 · 智能视觉平台（智能安防监控系统）· 2026-10-17 · 状态：评审中<br>
+  前序文档：PRD v1.0（单机闭环版，保留作为 S1 阶段决策记录）· 证据源：源码走查、现场截图、操作员反馈
+</footer>
+</main>
+</div>
+</body>
+</html>
