@@ -49,6 +49,9 @@ struct VideoSourceConfig
     double blackLift = 14;           // 黑位抬升 0-64：暗部不再压成死黑，背景细节显现（系统相机感的核心）
     double clipLimit = 1.2;          // CLAHE 强度（轻度）：>1 生效，防噪声爆炸
     double saturation = 1.10;        // 饱和补偿倍数：提亮后色彩回鲜；1.0=不动
+    // 时域降噪（模拟系统相机驱动的 3D NR）：暗场高增益噪声靠多帧平均消除
+    bool noiseReduction = true;      // 静止区时域平均 + 色斑清理；运动区直通防拖影
+    double nrAlpha = 0.15;           // 静止区收敛系数：越小越干净（拖影风险越高）
 
     bool operator==(const VideoSourceConfig& o) const
     {
@@ -57,7 +60,8 @@ struct VideoSourceConfig
             && autoExposure == o.autoExposure && exposure == o.exposure
             && enhance == o.enhance && gammaTarget == o.gammaTarget
             && blackLift == o.blackLift && clipLimit == o.clipLimit
-            && saturation == o.saturation;
+            && saturation == o.saturation && noiseReduction == o.noiseReduction
+            && nrAlpha == o.nrAlpha;
     }
     bool operator!=(const VideoSourceConfig& o) const { return !(*this == o); }
 };

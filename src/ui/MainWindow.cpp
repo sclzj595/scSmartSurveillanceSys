@@ -564,6 +564,9 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
     cfg.blackLift   = _settings->value("Camera/blackLift", 14).toDouble();
     cfg.clipLimit   = _settings->value("Camera/clipLimit", 1.2).toDouble();
     cfg.saturation  = _settings->value("Camera/saturation", 1.10).toDouble();
+    // 时域降噪（模拟驱动 3D NR）：Camera/nr=0 关闭
+    cfg.noiseReduction = _settings->value("Camera/nr", true).toBool();
+    cfg.nrAlpha        = _settings->value("Camera/nrAlpha", 0.15).toDouble();
     return cfg;
 }
 
@@ -582,6 +585,8 @@ void MainWindow::saveSourceConfig(const VideoSourceConfig& cfg)
     _settings->setValue("Camera/blackLift",    cfg.blackLift);
     _settings->setValue("Camera/clipLimit",    cfg.clipLimit);
     _settings->setValue("Camera/saturation",   cfg.saturation);
+    _settings->setValue("Camera/nr",           cfg.noiseReduction);
+    _settings->setValue("Camera/nrAlpha",      cfg.nrAlpha);
     _settings->sync();
 }
 

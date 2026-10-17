@@ -43,6 +43,9 @@ public:
         _clahe.release();
         if (_cfg.enhance && _cfg.clipLimit > 1.0)
             _clahe = cv::createCLAHE(_cfg.clipLimit, cv::Size(8, 8));
+        // 时域降噪基准复位（重开流 = 场景可能已变，重新收敛）
+        _nrAcc.release();
+        _nrPrev.release();
         // 饱和补偿 LUT：HSV 的 S 通道整体乘系数（提亮后色彩回鲜），开器时建一次
         _satLut.release();
         if (_cfg.enhance && _cfg.saturation > 1.001) {
@@ -66,6 +69,11 @@ public:
         _cap >> out;
         if (out.empty())
             return false;
+        // 降噪在调色之前：先消时域噪声，后续提亮曲线才不会把噪声一起放大
+        if (_cfg.noiseReduction) {
+            applyTemporalNr(out);
+            smoothChroma(out);
+        }
         if (!_cfg.enhance)
             return true;
         // 三段增强管线（顺序有讲究：先整体提亮再局部均衡，最后色彩回鲜）：
@@ -126,6 +134,53 @@ public:
     }
 
 private:
+    // ---- 时域降噪（对齐系统相机驱动里的 3D NR）----
+    // 原理：暗场噪声是逐帧随机的，多帧指数滑动平均可将其约 √N 倍地压掉；
+    // 运动掩膜保护移动目标（变化超阈值的像素走直通），静止区重度平均。
+    // 这就是"系统相机周围没噪点"的技术来源——驱动 3D NR 的软件等价物
+    void applyTemporalNr(cv::Mat& frame)
+    {
+        cv::Mat f32;
+        frame.convertTo(f32, CV_32F);
+        if (_nrAcc.empty()) {           // 首帧：建立基准
+            f32.copyTo(_nrAcc);
+            frame.copyTo(_nrPrev);
+            return;
+        }
+        // 运动掩膜：与上一帧输出比，变化大的像素直通（alpha=1）防拖影；
+        // boxFilter 羽化掩膜边缘，避免"静/动交界闪烁"
+        cv::Mat diff, motion, a8;
+        cv::absdiff(frame, _nrPrev, diff);
+        cv::threshold(diff, motion, 28.0, 255.0, cv::THRESH_BINARY);
+        cv::boxFilter(motion, motion, -1, cv::Size(5, 5));
+        cv::threshold(motion, motion, 20.0, 255.0, cv::THRESH_BINARY);
+        motion.convertTo(a8, CV_32F, 1.0 / 255.0);
+        cv::Mat alpha(motion.size(), CV_32F, qBound(0.05, _cfg.nrAlpha, 0.5));
+        cv::max(alpha, a8, alpha);      // 逐像素：静止→nrAlpha，运动→1.0
+        cv::Mat delta;
+        cv::multiply(alpha, f32 - _nrAcc, delta);
+        cv::add(_nrAcc, delta, _nrAcc);
+        _nrAcc.convertTo(frame, CV_8U);
+        frame.copyTo(_nrPrev);
+    }
+
+    // ---- 色斑清理 ----
+    // MJPG 4:2:0 压缩的椒盐色斑集中在色度（低频），色度 2x 降采样再复原即除，
+    // 亮度通道不动（细节无损）；这就是背景红绿噪点的来源
+    void smoothChroma(cv::Mat& frame)
+    {
+        cv::Mat ycc;
+        cv::cvtColor(frame, ycc, cv::COLOR_BGR2YCrCb);
+        std::vector<cv::Mat> ch;
+        cv::split(ycc, ch);
+        cv::resize(ch[1], ch[1], cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+        cv::resize(ch[2], ch[2], cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+        cv::resize(ch[1], ch[1], ycc.size(), 0, 0, cv::INTER_LINEAR);
+        cv::resize(ch[2], ch[2], ycc.size(), 0, 0, cv::INTER_LINEAR);
+        cv::merge(ch, ycc);
+        cv::cvtColor(ycc, frame, cv::COLOR_YCrCb2BGR);
+    }
+
     // AE 暖机冲刷：打开后丢弃帧直到亮度稳定（连续两帧均值差 < 2.5），
     // 有界 ~1.2s / 30 帧——收敛完成前不对外出画，首帧即正常曝光。
     // 亮度用 64x64 缩略图均值，单次开销微秒级，不拖慢打开路径
@@ -157,6 +212,8 @@ private:
     cv::VideoCapture _cap;
     cv::Ptr<cv::CLAHE> _clahe;   // 轻度局部均衡（空 = 关闭）
     cv::Mat _satLut;             // 饱和补偿 LUT（空 = 不补偿）
+    cv::Mat _nrAcc;              // 时域降噪累加器（CV_32F）
+    cv::Mat _nrPrev;             // 上一帧输出（运动掩膜参考）
 };
 
 // RTSP 网络流：FFMPEG 后端 + socket 超时。
