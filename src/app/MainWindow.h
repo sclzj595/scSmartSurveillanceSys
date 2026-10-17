@@ -10,6 +10,7 @@
 #include "FaceRecognition.h"
 #include "ObjectDetection.h"
 #include "OverlayRenderer.h"
+#include "EventStore.h"
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -20,6 +21,7 @@
 #include <QTimer>
 #include <QMutex>
 #include <QElapsedTimer>
+#include <QVector>
 
 // 线程模型（FR-01 异步识别管线）：
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
@@ -81,6 +83,15 @@ private:
     AnalysisResult _lastResult;           // 最近一次分析结果（_resultMutex 保护）
     QMutex _resultMutex;
     OverlayRenderer::Hud _hud;            // 诊断角标数据
+
+    // 事件持久化（V0.4 / PRD 第 8 章）：业务判定 → 渲染节拍搭车截图 → 异步落盘
+    EventStore* _eventStore = nullptr;
+    EventThrottle _eventThrottle;         // R2 冷却
+    bool _lastLeftAny = false;            // 遗留物沿检测：上帧是否存在确认遗留目标
+    QVector<SecurityEvent> _pendingEvents; // 待搭车截图的事件（_resultMutex 保护）
+    QPushButton* _historyBtn = nullptr;
+
+    void detectEvents(const AnalysisResult& result);   // 事件判定（业务层规则）
 
     // 渲染帧率统计
     QElapsedTimer _renderClock;

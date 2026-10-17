@@ -17,6 +17,11 @@ public:
     static double faceConfidenceThreshold() {
         return 55.0;
     }
+
+    // 事件存证根目录（PRD 10.1 分区；按日期分目录，V0.4 事件持久化）
+    static QString eventsRoot() {
+        return "./events";
+    }
 };
 
 #endif // DATACONFIG_H

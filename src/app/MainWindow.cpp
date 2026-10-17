@@ -11,6 +11,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QLineEdit>
+#include <QDateTime>
+#include "EventHistoryDialog.h"
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
@@ -32,6 +34,12 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     qRegisterMetaType<cv::Rect>("cv::Rect");
 
     _frameBank = new FrameBank;
+
+    // 事件中心（V0.4）：业务判定在 GUI 侧，落盘在独立 worker 线程（R4 失败仅提示）
+    _eventStore = new EventStore(this);
+    connect(_eventStore, &EventStore::storeError, this, [this](const QString& msg) {
+        _logLabel->setText(QStringLiteral("事件存证异常（识别不受影响）：%1").arg(msg));
+    });
 
     // 采集线程：摄像头 → FrameBank（覆盖式写入，永不阻塞）
     _captureThread = new VideoCaptureThread(_frameBank, this);
@@ -85,14 +93,88 @@ void MainWindow::renderTick()
     _hud.latencyMs = frameAgeMs;
     OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
     updateVideoFrame(image);
+
+    // 事件搭车截图：本帧标注图恰好为全分辨率存证所需，一并交给落盘线程
+    QVector<SecurityEvent> pending;
+    {
+        QMutexLocker locker(&_resultMutex);
+        pending.swap(_pendingEvents);
+    }
+    if (!pending.isEmpty())
+        _eventStore->enqueue(pending, image.copy());   // copy 脱离 draw 缓冲，跨线程安全
+}
+
+// 事件判定（业务层规则，PRD 8.1；引擎只给结构化结果，"什么算事件"在这里）
+void MainWindow::detectEvents(const AnalysisResult& result)
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    QVector<SecurityEvent> events;
+
+    for (const FaceResult& f : result.faces) {
+        if (f.known) {
+            // 人员识别：同人 30s 冷却（R2）
+            if (_eventThrottle.allow(QStringLiteral("face_known:%1").arg(f.name), now, 30 * 1000)) {
+                SecurityEvent e;
+                e.type = SecurityEvent::FaceKnown;
+                e.subject = f.name;
+                e.similarity = f.similarity;
+                e.detail = QStringLiteral("识别到已登记人员（相似度 %1%）").arg(f.similarity, 0, 'f', 0);
+                events.append(e);
+            }
+        } else if (f.similarity >= 0) {
+            // 陌生人出现：有检测未命中；陌生人无稳定标识，按类型整体 30s 冷却
+            if (_eventThrottle.allow(QStringLiteral("face_unknown"), now, 30 * 1000)) {
+                SecurityEvent e;
+                e.type = SecurityEvent::FaceUnknown;
+                e.subject = QStringLiteral("陌生人");
+                e.similarity = f.similarity;
+                e.detail = QStringLiteral("出现未登记人脸（与档案最高相似度 %1%）").arg(f.similarity, 0, 'f', 0);
+                events.append(e);
+            }
+        }
+    }
+
+    if (result.intrusion.active) {
+        // 禁区入侵：10s 冷却（R2）
+        if (_eventThrottle.allow(QStringLiteral("intrusion:zone"), now, 10 * 1000)) {
+            SecurityEvent e;
+            e.type = SecurityEvent::Intrusion;
+            e.subject = QStringLiteral("禁区");
+            e.detail = QStringLiteral("有目标进入禁区（目标数 %1）").arg(result.intrusion.offenders.size());
+            events.append(e);
+        }
+    }
+
+    // 遗留物沿检测：确认遗留出现 / 解除各触发一次（60s 保险冷却防抖动刷屏）
+    const bool leftAny = !result.objects.empty();
+    if (leftAny != _lastLeftAny) {
+        if (_eventThrottle.allow(QStringLiteral("left_object"), now, 60 * 1000)) {
+            SecurityEvent e;
+            e.type = leftAny ? SecurityEvent::LeftObject : SecurityEvent::LeftCleared;
+            e.subject = QStringLiteral("画面目标");
+            e.detail = leftAny
+                ? QStringLiteral("目标静止超过阈值，确认遗留")
+                : QStringLiteral("遗留物已移走");
+            events.append(e);
+        }
+        _lastLeftAny = leftAny;
+    }
+
+    if (!events.isEmpty()) {
+        QMutexLocker locker(&_resultMutex);
+        _pendingEvents += events;
+    }
 }
 
 void MainWindow::onAnalysisReady(const AnalysisResult& result)
 {
-    QMutexLocker locker(&_resultMutex);
-    _lastResult = result;       // 覆盖式：渲染永远用最新结果
-    _hud.analysisFps = result.analysisFps;
-    _hud.processMs = result.processMs;
+    {
+        QMutexLocker locker(&_resultMutex);
+        _lastResult = result;       // 覆盖式：渲染永远用最新结果
+        _hud.analysisFps = result.analysisFps;
+        _hud.processMs = result.processMs;
+    }
+    detectEvents(result);   // 事件判定（轻量：哈希查表 + 沿比较，GUI 线程可承受）
 }
 
 MainWindow::~MainWindow()
@@ -250,6 +332,14 @@ void MainWindow::initUI()
     });
     btnLayout->addWidget(_registerFaceBtn);
 
+    // 历史记录（V0.4 事件持久化的查询入口，PRD 8.3）
+    _historyBtn = new QPushButton("历史记录", this);
+    connect(_historyBtn, &QPushButton::clicked, this, [this]() {
+        EventHistoryDialog dlg(this);
+        dlg.exec();
+    });
+    btnLayout->addWidget(_historyBtn);
+
     // 主布局里面加按钮布局
     mainLayout->addLayout(btnLayout);
 
@@ -349,13 +439,15 @@ void MainWindow::saveThemeConfig()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // 关闭顺序：先停渲染节拍 → 停分析线程 → 停采集线程（自释放设备）
+    // 关闭顺序：先停渲染节拍 → 停分析线程 → 停事件落盘线程 → 停采集线程（自释放设备）
     if (_renderTimer)
         _renderTimer->stop();
     if (_analysisThread && _analysisThread->isRunning()) {
         _analysisThread->shutdown();
         _analysisThread->wait(2000);
     }
+    if (_eventStore)
+        _eventStore->shutdown();
     if (_captureThread && _captureThread->isRunning()) {
         _captureThread->stopCapture();
     }
