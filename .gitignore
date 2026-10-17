@@ -18,6 +18,11 @@ Makefile
 # OpenCV 4.5.2 MinGW 版：https://opencv.org/releases/ 解压到 utils/opencv4_5_2
 utils/
 
+# ===== 流媒体工具（不入库，本机放置；MediaLink/V0.7 推流链路用）=====
+# MediaMTX v1.11.3: https://github.com/bluenviron/mediamtx/releases → tools/mediamtx.exe
+# ffmpeg: 本机自带（剪映/其他发行版）复制一份到 tools/ffmpeg.exe
+tools/
+
 # ===== Python 原型（2022114027谢攀-.../qmzy）垃圾目录 =====
 **/venv/
 **/__pycache__/

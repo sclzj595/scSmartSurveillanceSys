@@ -113,8 +113,19 @@ void MainWindow::renderTick()
         QMutexLocker locker(&_resultMutex);
         pending.swap(_pendingEvents);
     }
-    if (!pending.isEmpty())
+    if (!pending.isEmpty()) {
         _eventStore->enqueue(pending, image.copy());   // copy 脱离 draw 缓冲，跨线程安全
+        for (const SecurityEvent& e : pending) {       // WS 事件推送（V0.7，非阻塞入队）
+            if (_mediaLink)
+                _mediaLink->pushEvent(nlohmann::json{
+                    {"ts", e.tsMs},
+                    {"type", SecurityEvent::typeKey(e.type).toStdString()},
+                    {"subject", e.subject.toStdString()},
+                    {"similarity", e.similarity},
+                    {"detail", e.detail.toStdString()}
+                });
+        }
+    }
 }
 
 // 事件判定（业务层规则，PRD 8.1；引擎只给结构化结果，"什么算事件"在这里）
@@ -421,11 +432,15 @@ void MainWindow::initMediaLink()
     };
     _mediaLink->setProviders(p);
 
-    if (_mediaLink->startHttp(8080))
+    if (_mediaLink->startHttp(8080)) {
+        const bool wsOk = _mediaLink->startWs(8081);
         _logLabel->setText(QStringLiteral(
-            "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）"));
-    else
+            "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）%1")
+            .arg(wsOk ? QStringLiteral("；WS 事件推送 :8081 已开启")
+                      : QStringLiteral("；WS :8081 端口被占用，事件推送未开启")));
+    } else {
         _logLabel->setText(QStringLiteral("HTTP :8080 端口被占用，数据服务未开启"));
+    }
 }
 
 VideoSourceConfig MainWindow::loadSourceConfig() const
