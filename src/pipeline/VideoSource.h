@@ -42,12 +42,13 @@ struct VideoSourceConfig
     // 逆光场景 AE 拉长曝光 → 帧率被压到 ~9fps。autoExposure=false 时锁死快门
     bool autoExposure = true;        // true=自动曝光+打开后暖机冲刷（等收敛再出画）
     double exposure = -6.0;          // 手动曝光（DSHOW log2 秒：-6≈1/64s，可保 30fps）
-    // 画质增强（阶段02 实测项）：逆光画面发暗 → "自适应 gamma 提亮为主 + 轻度
-    // CLAHE + 饱和补偿"三段组合（单靠大强度 CLAHE 会放大暗部噪声且全图泛灰）
+    // 画质增强（阶段02 实测项）：对齐系统相机观感 = lift-gamma-gain 调色曲线
+    // （黑位抬起不死黑 + 中间调提亮）+ 轻度 CLAHE + 饱和补偿
     bool enhance = true;             // USB 源读帧后逐帧增强（全管线约 6ms@640x480）
-    double gammaTarget = 120;        // 自适应 gamma 目标均值 0-255：0=关闭；只提亮不压暗
-    double clipLimit = 1.5;          // CLAHE 强度（轻度）：>1 生效，防噪声爆炸
-    double saturation = 1.08;        // 饱和补偿倍数：提亮后色彩回鲜；1.0=不动
+    double gammaTarget = 135;        // 自适应 gamma 目标均值 0-255：0=关闭；只提亮不压暗
+    double blackLift = 14;           // 黑位抬升 0-64：暗部不再压成死黑，背景细节显现（系统相机感的核心）
+    double clipLimit = 1.2;          // CLAHE 强度（轻度）：>1 生效，防噪声爆炸
+    double saturation = 1.10;        // 饱和补偿倍数：提亮后色彩回鲜；1.0=不动
 
     bool operator==(const VideoSourceConfig& o) const
     {
@@ -55,7 +56,8 @@ struct VideoSourceConfig
             && width == o.width && height == o.height && fps == o.fps
             && autoExposure == o.autoExposure && exposure == o.exposure
             && enhance == o.enhance && gammaTarget == o.gammaTarget
-            && clipLimit == o.clipLimit && saturation == o.saturation;
+            && blackLift == o.blackLift && clipLimit == o.clipLimit
+            && saturation == o.saturation;
     }
     bool operator!=(const VideoSourceConfig& o) const { return !(*this == o); }
 };

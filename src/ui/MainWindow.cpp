@@ -558,11 +558,12 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
     // Camera/autoExposure=0 + Camera/exposure=-6（log2 秒，-6≈1/64s 保 30fps）
     cfg.autoExposure = _settings->value("Camera/autoExposure", true).toBool();
     cfg.exposure     = _settings->value("Camera/exposure", -6.0).toDouble();
-    // 画质增强（阶段02 实测项）：三段组合参数，Camera/enhance=0 一键关闭
+    // 画质增强（阶段02 实测项）：对齐系统相机观感，Camera/enhance=0 一键关闭
     cfg.enhance     = _settings->value("Camera/enhance", true).toBool();
-    cfg.gammaTarget = _settings->value("Camera/gammaTarget", 120).toDouble();
-    cfg.clipLimit   = _settings->value("Camera/clipLimit", 1.5).toDouble();
-    cfg.saturation  = _settings->value("Camera/saturation", 1.08).toDouble();
+    cfg.gammaTarget = _settings->value("Camera/gammaTarget", 135).toDouble();
+    cfg.blackLift   = _settings->value("Camera/blackLift", 14).toDouble();
+    cfg.clipLimit   = _settings->value("Camera/clipLimit", 1.2).toDouble();
+    cfg.saturation  = _settings->value("Camera/saturation", 1.10).toDouble();
     return cfg;
 }
 
@@ -578,6 +579,7 @@ void MainWindow::saveSourceConfig(const VideoSourceConfig& cfg)
     _settings->setValue("Camera/exposure",     cfg.exposure);
     _settings->setValue("Camera/enhance",      cfg.enhance);
     _settings->setValue("Camera/gammaTarget",  cfg.gammaTarget);
+    _settings->setValue("Camera/blackLift",    cfg.blackLift);
     _settings->setValue("Camera/clipLimit",    cfg.clipLimit);
     _settings->setValue("Camera/saturation",   cfg.saturation);
     _settings->sync();

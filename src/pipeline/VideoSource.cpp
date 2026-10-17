@@ -69,21 +69,27 @@ public:
         if (!_cfg.enhance)
             return true;
         // 三段增强管线（顺序有讲究：先整体提亮再局部均衡，最后色彩回鲜）：
-        // 1) 自适应 gamma：按全帧均值把暗帧提亮到目标（gamma<1 只提亮不压暗）。
-        //    这是主提亮手段——全局平滑，不像大强度 CLAHE 那样放大噪声/拉灰画面
-        if (_cfg.gammaTarget > 0) {
+        // 1) lift-gamma-gain 调色曲线（系统相机观感的核心）：
+        //    lut[i] = lift + (255-lift) * (i/255)^gamma
+        //    —— 黑位抬起（暗部成深灰不死黑，背景细节显现）+ gamma 拉中间调；
+        //    gamma 按全帧均值自适应到目标亮度，只提亮不压暗
+        if (_cfg.gammaTarget > 0 || _cfg.blackLift > 0.5) {
             const cv::Scalar s = cv::mean(out);
             const double mean = (s[0] + s[1] + s[2]) / 3.0;
-            if (mean > 1.0 && mean < _cfg.gammaTarget) {
-                double gamma = std::log(_cfg.gammaTarget / 255.0) / std::log(mean / 255.0);
-                gamma = qBound(0.55, gamma, 1.0);
-                if (gamma < 0.995) {
-                    cv::Mat lut(1, 256, CV_8UC1);
-                    for (int i = 0; i < 256; ++i)
-                        lut.at<uchar>(i) = cv::saturate_cast<uchar>(
-                            std::pow(i / 255.0, gamma) * 255.0);
-                    cv::LUT(out, lut, out);
+            double gamma = 1.0;
+            if (_cfg.gammaTarget > 0 && mean > 1.0 && mean < _cfg.gammaTarget) {
+                gamma = std::log(_cfg.gammaTarget / 255.0) / std::log(mean / 255.0);
+                gamma = qBound(0.70, gamma, 1.0);
+            }
+            const double lift = qBound(0.0, _cfg.blackLift, 64.0);
+            if (gamma < 0.995 || lift > 0.5) {
+                cv::Mat lut(1, 256, CV_8UC1);
+                for (int i = 0; i < 256; ++i) {
+                    const double v = lift + (255.0 - lift)
+                                   * std::pow(i / 255.0, gamma);
+                    lut.at<uchar>(i) = cv::saturate_cast<uchar>(v);
                 }
+                cv::LUT(out, lut, out);
             }
         }
         // 2) 轻度 CLAHE：只调 LAB 亮度通道，补局部小反差（暗角里的脸），主亮度不靠它
