@@ -451,8 +451,10 @@ void MainWindow::initUI()
             setToggleState(_streamBtn, false);
             _logLabel->setText(QStringLiteral("推流已停止"));
         } else {
-            mlink::StreamConfig cfg;         // 默认 tools/ffmpeg.exe → rtsp://127.0.0.1:8554/sccam
-            cfg.bitrateKbps = 2500;          // 呈现帧含标注文字，码率上调保清晰度
+            // v0.3.0：推流参数由 exe 旁 medialink.json 驱动（阶段03 收口），
+            // 呈现帧含标注文字，码率上调保清晰度
+            mlink::StreamConfig cfg = _mlCfg.toStreamConfig();
+            cfg.bitrateKbps = 2500;
             _mediaLink->setStreamConfig(cfg);
             if (!_mediaLink->startStream())
                 _logLabel->setText(QStringLiteral(
@@ -546,10 +548,18 @@ void MainWindow::initMediaLink()
     };
     _mediaLink->setProviders(p);
 
-    // 端口宿主侧可配置（FR-09 前置）：Server/httpPort 缺省 8080（契约锁定缺省值），
-    // 本机 8080 常驻 SpringBoot 服务时可在 sys_param.ini 写 Server/httpPort=18080
-    const int httpPort = _settings->value("Server/httpPort", 8080).toInt();
-    const int wsPort   = _settings->value("Server/wsPort", 8081).toInt();
+    // 端口配置（阶段03 收口）：单一来源 exe 旁 medialink.json；文件缺失时回退
+    // FR-09 的 ini 覆盖（Server/httpPort，缺省 8080 契约锁定值）
+    std::string cfgErr;
+    const bool cfgOk = mlink::loadMediaLinkConfig("medialink.json", _mlCfg, cfgErr);
+    if (!cfgOk)
+        qWarning() << "MediaLink 配置缺失/非法，回退默认值：" << QString::fromStdString(cfgErr);
+    int httpPort = _mlCfg.httpPort;
+    int wsPort   = _mlCfg.wsPort;
+    if (!cfgOk) {
+        httpPort = _settings->value("Server/httpPort", 8080).toInt();
+        wsPort   = _settings->value("Server/wsPort", 8081).toInt();
+    }
     if (_mediaLink->startHttp(httpPort)) {
         const bool wsOk = _mediaLink->startWs(wsPort);
         setChipState(_svcChip, wsOk ? QStringLiteral("服务 :%1 · WS :%2").arg(httpPort).arg(wsPort)

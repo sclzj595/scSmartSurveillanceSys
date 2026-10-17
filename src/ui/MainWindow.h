@@ -25,6 +25,7 @@
 #include <QVector>
 #include <QRubberBand>
 #include <medialink/MediaLink.h>
+#include <medialink/MediaLinkConfig.h>
 
 // 线程模型（FR-01 异步识别管线）：
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
@@ -120,6 +121,7 @@ private:
     // ---- 独立服务层 MediaLink（PRD 第 9 章：HTTP 数据服务 + WebRTC 推流）----
     void initMediaLink();                              // 构造尾部调用：HTTP + providers
     mlink::MediaLink* _mediaLink = nullptr;
+    mlink::MediaLinkConfig _mlCfg;                     // 服务层配置（exe 旁 medialink.json，阶段03 收口）
     QPushButton* _streamBtn = nullptr;                 // WebRTC 推流开关（默认关）
     bool _streamOn = false;
 
