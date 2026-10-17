@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QtGlobal>
+#include <cmath>
 #include <opencv2/imgproc.hpp>
 
 namespace {
@@ -38,10 +39,18 @@ public:
             _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.25);   // 手动：锁死快门（帧率与亮度双稳定）
             _cap.set(cv::CAP_PROP_EXPOSURE, _cfg.exposure);
         }
-        // 画质增强器（逆光补偿）：读帧路径逐帧应用，预览/分析/推流同帧受益
+        // 画质增强器（三段组合）：读帧路径逐帧应用，预览/分析/推流同帧受益
         _clahe.release();
         if (_cfg.enhance && _cfg.clipLimit > 1.0)
             _clahe = cv::createCLAHE(_cfg.clipLimit, cv::Size(8, 8));
+        // 饱和补偿 LUT：HSV 的 S 通道整体乘系数（提亮后色彩回鲜），开器时建一次
+        _satLut.release();
+        if (_cfg.enhance && _cfg.saturation > 1.001) {
+            cv::Mat lut(1, 256, CV_8UC1);
+            for (int i = 0; i < 256; ++i)
+                lut.at<uchar>(i) = cv::saturate_cast<uchar>(i * _cfg.saturation);
+            _satLut = lut;
+        }
         qInfo() << "USB source opened:"
                 << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
                 << "fps=" << _cap.get(cv::CAP_PROP_FPS)
@@ -57,8 +66,27 @@ public:
         _cap >> out;
         if (out.empty())
             return false;
-        // CLAHE 逆光补偿：只调 LAB 的 L 通道（局部自适应均衡）——逆光前景提亮、
-        // 暗部细节显现，色度不动；clipLimit 限制放大倍数防噪声爆炸
+        if (!_cfg.enhance)
+            return true;
+        // 三段增强管线（顺序有讲究：先整体提亮再局部均衡，最后色彩回鲜）：
+        // 1) 自适应 gamma：按全帧均值把暗帧提亮到目标（gamma<1 只提亮不压暗）。
+        //    这是主提亮手段——全局平滑，不像大强度 CLAHE 那样放大噪声/拉灰画面
+        if (_cfg.gammaTarget > 0) {
+            const cv::Scalar s = cv::mean(out);
+            const double mean = (s[0] + s[1] + s[2]) / 3.0;
+            if (mean > 1.0 && mean < _cfg.gammaTarget) {
+                double gamma = std::log(_cfg.gammaTarget / 255.0) / std::log(mean / 255.0);
+                gamma = qBound(0.55, gamma, 1.0);
+                if (gamma < 0.995) {
+                    cv::Mat lut(1, 256, CV_8UC1);
+                    for (int i = 0; i < 256; ++i)
+                        lut.at<uchar>(i) = cv::saturate_cast<uchar>(
+                            std::pow(i / 255.0, gamma) * 255.0);
+                    cv::LUT(out, lut, out);
+                }
+            }
+        }
+        // 2) 轻度 CLAHE：只调 LAB 亮度通道，补局部小反差（暗角里的脸），主亮度不靠它
         if (_clahe) {
             cv::Mat lab;
             cv::cvtColor(out, lab, cv::COLOR_BGR2Lab);
@@ -67,6 +95,16 @@ public:
             _clahe->apply(ch[0], ch[0]);
             cv::merge(ch, lab);
             cv::cvtColor(lab, out, cv::COLOR_Lab2BGR);
+        }
+        // 3) 饱和补偿：gamma+CLAHE 提亮会让色彩观感变淡，S 通道乘系数回鲜
+        if (!_satLut.empty()) {
+            cv::Mat hsv;
+            cv::cvtColor(out, hsv, cv::COLOR_BGR2HSV);
+            std::vector<cv::Mat> ch;
+            cv::split(hsv, ch);
+            cv::LUT(ch[1], _satLut, ch[1]);
+            cv::merge(ch, hsv);
+            cv::cvtColor(hsv, out, cv::COLOR_HSV2BGR);
         }
         return true;
     }
@@ -111,7 +149,8 @@ private:
 
     VideoSourceConfig _cfg;
     cv::VideoCapture _cap;
-    cv::Ptr<cv::CLAHE> _clahe;   // 逆光补偿（空 = 关闭）
+    cv::Ptr<cv::CLAHE> _clahe;   // 轻度局部均衡（空 = 关闭）
+    cv::Mat _satLut;             // 饱和补偿 LUT（空 = 不补偿）
 };
 
 // RTSP 网络流：FFMPEG 后端 + socket 超时。
