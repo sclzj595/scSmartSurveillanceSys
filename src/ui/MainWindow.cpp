@@ -21,8 +21,8 @@
 
 MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
 {
-    // 初始化设置
-    _settings = new QSettings("sys_param.ini", QSettings::IniFormat, this);
+    // 初始化设置（路径锚定 exe 目录，与启动 CWD 无关——见 DataConfig::appDir）
+    _settings = new QSettings(DataConfig::settingsPath(), QSettings::IniFormat, this);
     _currentTheme = _settings->value("Theme/current", "dark").toString();
 
     // 初始化功能模块

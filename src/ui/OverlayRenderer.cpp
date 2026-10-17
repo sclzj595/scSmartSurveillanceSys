@@ -107,7 +107,7 @@ void OverlayRenderer::paint(QImage& img,
         }
     }
 
-    // 入侵：红色全框加粗目标 + 顶部告警横幅（半透明色带，工业告警语义）
+    // 入侵：红色全框加粗目标 + 顶部告警横幅（内缩圆角色带，避开边框与角标）
     if (intrusion.active) {
         p.setRenderHint(QPainter::Antialiasing, false);
         for (const cv::Rect& off : intrusion.offenders) {
@@ -115,17 +115,21 @@ void OverlayRenderer::paint(QImage& img,
             p.drawRect(toQRect(off));
         }
         p.setRenderHint(QPainter::Antialiasing, true);
-        const QRect band(0, 0, img.width(), 40);
-        p.fillRect(band, uitheme::OverlayPalette::banner);
+        const QRect band(16, 14, img.width() - 32, 42);
+        p.setPen(Qt::NoPen);
+        p.setBrush(uitheme::OverlayPalette::banner);
+        p.drawRoundedRect(band, 10, 10);
+        p.setBrush(Qt::NoBrush);
         QFont f = p.font();
-        f.setPointSize(16);
+        f.setPointSize(15);
         f.setBold(true);
         p.setFont(f);
         p.setPen(uitheme::OverlayPalette::white);
-        p.drawText(band, Qt::AlignCenter, QStringLiteral("入 侵 告 警"));
+        p.drawText(band, Qt::AlignCenter, QStringLiteral("⚠  入 侵 告 警"));
     }
 
-    // 诊断角标（FR-08）：预览fps · 分析Hz · 分析耗时 · 帧龄（延迟）
+    // 诊断角标（FR-08）：右下角（顶部让位给告警横幅/禁区标签，避免重叠）
+    // 预览fps · 分析Hz · 分析耗时 · 帧龄（延迟）
     if (hud.show) {
         const QString latency = hud.latencyMs >= 0
             ? QStringLiteral("%1ms").arg(hud.latencyMs)
@@ -141,7 +145,9 @@ void OverlayRenderer::paint(QImage& img,
         p.setFont(f);
         const QFontMetrics fm(p.font());
         const QRect tr = fm.boundingRect(txt);
-        const QRect bg(img.width() - tr.width() - 22, 10, tr.width() + 18, tr.height() + 10);
+        const QRect bg(img.width() - tr.width() - 22,
+                       img.height() - tr.height() - 18,
+                       tr.width() + 18, tr.height() + 10);
         p.setPen(Qt::NoPen);
         p.setBrush(uitheme::OverlayPalette::labelScrim);
         p.drawRoundedRect(bg, 6, 6);
