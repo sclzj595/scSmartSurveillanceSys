@@ -3,6 +3,7 @@
 
 #include <QElapsedTimer>
 #include <QDebug>
+#include <opencv2/core.hpp>
 #include "FaceRecognition.h"
 #include "ObjectDetection.h"
 #include "IntrusionDetection.h"
@@ -62,16 +63,25 @@ void AnalysisThread::run()
         QElapsedTimer cost;
         cost.start();
 
+        // 异常隔离：单帧算法异常（如 CV 断言）只跳过该帧，绝不杀死整个进程
         AnalysisResult result;
-        if (_face)      _face->analyze(frame, result.faces);
-        if (_object)    _object->analyze(frame, result.objects);
+        try {
+            if (_face)      _face->analyze(frame, result.faces);
+            if (_object)    _object->analyze(frame, result.objects);
 
-        if (_intrusion && _intrusion->isZoneActive()) {
-            std::vector<cv::Rect> faceRects;
-            faceRects.reserve(result.faces.size());
-            for (const FaceResult& f : result.faces)
-                faceRects.push_back(f.rect);
-            result.intrusion = _intrusion->analyze(faceRects);
+            if (_intrusion && _intrusion->isZoneActive()) {
+                std::vector<cv::Rect> faceRects;
+                faceRects.reserve(result.faces.size());
+                for (const FaceResult& f : result.faces)
+                    faceRects.push_back(f.rect);
+                result.intrusion = _intrusion->analyze(faceRects);
+            }
+        } catch (const cv::Exception& e) {
+            qWarning() << "Analysis CV exception, frame skipped:" << e.what();
+            continue;
+        } catch (const std::exception& e) {
+            qWarning() << "Analysis exception, frame skipped:" << e.what();
+            continue;
         }
 
         result.processMs = static_cast<int>(cost.elapsed());

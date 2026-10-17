@@ -29,28 +29,34 @@ cv::Mat FaceRecognition::LBPHRecognizer::computeLBP(const cv::Mat& src) const {
 }
 
 void FaceRecognition::LBPHRecognizer::train(
-    const std::vector<cv::Mat>& images, 
-    const std::vector<int>& labels) 
+    const std::vector<cv::Mat>& images,
+    const std::vector<int>& labels)
 {
     for(size_t i = 0; i < images.size(); i++) {
-        // 现在_model存储的是样本向量
-        _model[labels[i]].push_back(images[i]);
+        // 存储与 predict 同口径的 LBP 特征（98x98），而非原始灰度图。
+        // 否则 cv::norm(98x98, 100x100) 尺寸不匹配 → cv::Exception → 进程崩溃
+        _model[labels[i]].push_back(computeLBP(images[i]));
     }
 }
 
 void FaceRecognition::LBPHRecognizer::predict(
-    const cv::Mat& src, 
-    int& label, 
-    double& confidence) const 
+    const cv::Mat& src,
+    int& label,
+    double& confidence) const
 {
-    cv::Mat lbpSrc = computeLBP(src);
     label = -1;
     confidence = DBL_MAX;
-    
+    if (src.rows < 3 || src.cols < 3) return;
+
+    cv::Mat lbpSrc = computeLBP(src);
+
     // 使用迭代器遍历
     for(auto it = _model.begin(); it != _model.end(); ++it) {
         const std::vector<cv::Mat>& samples = it->second;
         for(const cv::Mat& sample : samples) {
+            // 防御：尺寸不一致的历史样本直接跳过，绝不让 cv::norm 抛异常
+            if(sample.empty() || sample.size() != lbpSrc.size())
+                continue;
             double dist = cv::norm(lbpSrc, sample, cv::NORM_L2);
             if(dist < confidence) {
                 confidence = dist;
