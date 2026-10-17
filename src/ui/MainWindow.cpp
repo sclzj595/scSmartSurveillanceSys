@@ -2,6 +2,7 @@
 #include "MainWindow.h"
 #include "core/dataConfig.h"
 #include "ui/theme/ThemeManager.h"
+#include "ui/TitleBar.h"
 
 #include <QFile>
 #include <QMessageBox>
@@ -18,7 +19,7 @@
 #include <QDateTime>
 #include "EventHistoryDialog.h"
 
-MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
+MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
 {
     // 初始化设置
     _settings = new QSettings("sys_param.ini", QSettings::IniFormat, this);
@@ -222,35 +223,20 @@ void MainWindow::initUI()
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
 
-    // ---- 标题栏：logo 色块 + 标题 + 状态 chips + 主题切换 ----
-    auto* header = new QWidget(this);
-    header->setObjectName("headerBar");
-    auto* headerLay = new QHBoxLayout(header);
-    headerLay->setContentsMargins(14, 8, 14, 8);
-    headerLay->setSpacing(10);
-
-    auto* logo = new QLabel(header);
-    logo->setObjectName("logoChip");
-    logo->setFixedSize(6, 18);
-    auto* title = new QLabel(QStringLiteral("智能安防监控"), header);
-    title->setObjectName("appTitle");
-    headerLay->addWidget(logo);
-    headerLay->addWidget(title);
-    headerLay->addSpacing(8);
-
-    _srcChip = new QLabel(header);          // 当前视频源（updateSourceChip 回显）
+    // ---- Mac 风自绘标题栏：红绿灯窗控 + 标题 + 状态 chips + 主题切换 ----
+    _srcChip = new QLabel(this);              // 当前视频源（updateSourceChip 回显）
     _srcChip->setObjectName("srcChip");
-    _svcChip = new QLabel(header);          // 服务层 HTTP/WS 状态（initMediaLink 回显）
+    _svcChip = new QLabel(this);              // 服务层 HTTP/WS 状态（initMediaLink 回显）
     _svcChip->setObjectName("svcChip");
-    headerLay->addStretch();
-    headerLay->addWidget(_srcChip);
-    headerLay->addWidget(_svcChip);
-
-    _themeToggleBtn = new QPushButton(header);
+    _themeToggleBtn = new QPushButton(this);
     _themeToggleBtn->setObjectName("themeToggleBtn");
-    headerLay->addWidget(_themeToggleBtn);
     connect(_themeToggleBtn, &QPushButton::clicked, this, &MainWindow::toggleTheme);
-    root->addWidget(header);
+
+    _titleBar = new TitleBar(this);
+    _titleBar->addRight(_srcChip);
+    _titleBar->addRight(_svcChip);
+    _titleBar->addRight(_themeToggleBtn);
+    root->addWidget(_titleBar);
 
     // ---- 视频区（带边距的圆角面板）----
     auto* videoWrap = new QVBoxLayout;
@@ -263,12 +249,12 @@ void MainWindow::initUI()
     videoWrap->addWidget(_videoLabel);
     root->addLayout(videoWrap, 1);
 
-    // ---- 控制栏：全部功能按钮一排 ----
+    // ---- 控制栏：Dock 药丸式（Mac 风），窗口底部居中 ----
     auto* btnBar = new QWidget(this);
-    btnBar->setObjectName("btnBar");
+    btnBar->setObjectName("dockBar");
     auto* btnLayout = new QHBoxLayout(btnBar);
-    btnLayout->setContentsMargins(12, 4, 12, 8);
-    btnLayout->setSpacing(8);
+    btnLayout->setContentsMargins(4, 4, 4, 4);
+    btnLayout->setSpacing(2);
 
     // 人脸识别
     _faceRecogBtn = new QPushButton("人脸识别: 关闭", this);
@@ -435,8 +421,13 @@ void MainWindow::initUI()
     connect(_sourceBtn, &QPushButton::clicked, this, &MainWindow::showSourceDialog);
     btnLayout->addWidget(_sourceBtn);
 
-    btnLayout->addStretch();      // 按钮左聚，右侧留白
-    root->addWidget(btnBar);
+    // Dock 居中：左右 stretch 把药丸推到窗口中线
+    auto* dockRow = new QHBoxLayout;
+    dockRow->setContentsMargins(12, 2, 12, 10);
+    dockRow->addStretch();
+    dockRow->addWidget(btnBar);
+    dockRow->addStretch();
+    root->addLayout(dockRow);
 
     // ---- 状态栏：单行纤细日志（替代原 20% 高度大块）----
     _logLabel = new QLabel("系统日志：准备就绪", this);

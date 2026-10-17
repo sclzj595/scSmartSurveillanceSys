@@ -11,6 +11,8 @@ set(APP_SOURCES
     ui/OverlayRenderer.h        ui/OverlayRenderer.cpp
     ui/EventHistoryDialog.h     ui/EventHistoryDialog.cpp
     ui/WinTheme.h
+    ui/FramelessWindow.h       # 无边框窗基类：NCCALCSIZE 剥框架 + 缩放热区
+    ui/TitleBar.h              ui/TitleBar.cpp             # Mac 风自绘标题栏（红绿灯）
     ui/theme/DesignTokens.h     # 设计令牌（颜色/圆角/间距刻度单点）
     ui/theme/ThemeManager.h     ui/theme/ThemeManager.cpp   # 主题单点：令牌→QSS/原生标题栏
     # pipeline —— 异步识别管线

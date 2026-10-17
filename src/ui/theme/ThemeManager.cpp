@@ -79,10 +79,31 @@ QToolTip {
     padding: 4px 8px; font-size: 12px;
 }
 
-/* ===== 标题栏 ===== */
-QWidget#headerBar { background-color: @bgPanel; border-bottom: 1px solid @border; }
-QLabel#logoChip { background-color: @accent; border-radius: 1px; }
+/* ===== 自绘标题栏（Mac 风：红绿灯 + 标题 + chips）===== */
+QWidget#titleBar { background-color: @bgPanel; border-bottom: 1px solid @border; }
 QLabel#appTitle { color: @textPrimary; font-size: 15px; font-weight: 600; }
+/* 红绿灯：macOS 系统色为平台语义常量，不参与主题令牌 */
+QToolButton#lightClose, QToolButton#lightMin, QToolButton#lightMax {
+    min-width: 14px; max-width: 14px; min-height: 14px; max-height: 14px;
+    border: none; border-radius: 7px; padding: 0;
+    font-size: 9px; font-weight: bold; color: transparent;
+}
+QToolButton#lightClose { background-color: #ff5f57; }
+QToolButton#lightMin   { background-color: #febc2e; }
+QToolButton#lightMax   { background-color: #28c840; }
+QToolButton#lightClose:hover, QToolButton#lightMin:hover, QToolButton#lightMax:hover {
+    color: rgba(0, 0, 0, 0.55);
+}
+QToolButton#lightClose:pressed { background-color: #d94840; }
+QToolButton#lightMin:pressed   { background-color: #d99b23; }
+QToolButton#lightMax:pressed   { background-color: #1fa234; }
+QWidget#titleBar QPushButton#themeToggleBtn {
+    background: transparent; border: none; border-radius: 8px;
+    padding: 5px 12px; min-width: 0; color: @textMuted; font-size: 12px;
+}
+QWidget#titleBar QPushButton#themeToggleBtn:hover {
+    color: @textSecondary; background-color: @bgHover;
+}
 QLabel#srcChip, QLabel#svcChip {
     border: 1px solid @borderStrong; border-radius: 11px;
     padding: 2px 10px; color: @textMuted; background-color: @bgChip;
@@ -92,8 +113,23 @@ QLabel#srcChip[state="ok"], QLabel#svcChip[state="ok"] { color: @ok; border-colo
 QLabel#svcChip[state="bad"] { color: @danger; border-color: @dangerBorder; }
 
 /* ===== 视频面板 ===== */
-QLabel#videoLabel { background-color: @bgVideo; border: 1px solid @borderStrong; border-radius: 8px; }
-QWidget#btnBar { background: transparent; }
+QLabel#videoLabel { background-color: @bgVideo; border: 1px solid @borderStrong; border-radius: 12px; }
+
+/* ===== Dock 药丸式控制栏（Mac 风，底部居中）===== */
+QWidget#dockBar {
+    background-color: @bgPanel;
+    border: 1px solid @borderStrong; border-radius: 12px;
+}
+QWidget#dockBar QPushButton {
+    background: transparent; border: none; border-radius: 8px;
+    padding: 8px 18px; min-width: 0; color: @textSecondary;
+}
+QWidget#dockBar QPushButton:hover  { background-color: @bgHover; }
+QWidget#dockBar QPushButton:pressed { background-color: @bgActive; }
+QWidget#dockBar QPushButton:disabled { color: @textDisabled; }
+QWidget#dockBar QPushButton[state="on"] { color: @ok; background-color: @okBg; }
+QWidget#dockBar QPushButton[state="on"]:hover { background-color: @bgHover; }
+QWidget#dockBar QPushButton:checked { color: @warn; background-color: @warnBg; }
 
 /* ===== 按钮：中性默认，状态色只由 state/checked 语义驱动 ===== */
 QPushButton {
@@ -107,8 +143,6 @@ QPushButton:disabled { color: @textDisabled; border-color: @border; background-c
 QPushButton[state="on"] { color: @ok; border-color: @okBorder; background-color: @okBg; }
 QPushButton[state="on"]:hover { border-color: @ok; }
 QPushButton:checked { color: @warn; border-color: @warnBorder; background-color: @warnBg; }
-QPushButton#themeToggleBtn { min-width: 0; padding: 5px 12px; color: @textMuted; font-size: 12px; }
-QPushButton#themeToggleBtn:hover { color: @textSecondary; }
 
 /* ===== 状态栏 ===== */
 QLabel#logLabel {

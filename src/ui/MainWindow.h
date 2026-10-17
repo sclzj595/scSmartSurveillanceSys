@@ -4,6 +4,7 @@
 
 #pragma execution_character_set("utf-8")
 
+#include "FramelessWindow.h"
 #include "pipeline/VideoCaptureThread.h"
 #include "pipeline/AnalysisThread.h"
 #include "vision/IntrusionDetection.h"
@@ -29,7 +30,8 @@
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
 //   [GUI线程]  QTimer 30fps --load--> FrameBank --clone--> QPainter叠加标注 --> QLabel
 //   GUI 线程只承担轻量绘制与缩放，重计算全部离场 —— 预览满帧、延迟有界
-class MainWindow : public QWidget
+class TitleBar;
+class MainWindow : public FramelessWindow
 {
     Q_OBJECT
 
@@ -66,6 +68,7 @@ private:
     // UI组件
     QLabel* _videoLabel;
     QLabel* _logLabel;
+    TitleBar* _titleBar = nullptr;        // Mac 风自绘标题栏（红绿灯 + chips）
     QPushButton* _themeToggleBtn;
     QPushButton* _faceRecogBtn;
     QPushButton* _forbiddenZoneBtn;
