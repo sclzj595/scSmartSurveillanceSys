@@ -24,10 +24,12 @@ utils/
 tools/
 
 # ===== Python 原型（2022114027谢攀-.../qmzy）垃圾目录 =====
+# 2026-10-18 已整体归档至 f:/CODE/Qt_forNoVS/_archive/qmzy-py-prototype（C++ 工程零引用）
 **/venv/
 **/__pycache__/
 **/.idea/
 *.pyc
+/pyCore--standard/
 
 # ===== IDE =====
 .vscode/
