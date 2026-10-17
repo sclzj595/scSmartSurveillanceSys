@@ -28,7 +28,7 @@
 
 // 线程模型（FR-01 异步识别管线）：
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
-//   [GUI线程]  QTimer 30fps --load--> FrameBank --clone--> QPainter叠加标注 --> QLabel
+//   [GUI线程]  QTimer 60Hz --load--> FrameBank（版本去重）--clone--> QPainter叠加标注 --> QLabel
 //   GUI 线程只承担轻量绘制与缩放，重计算全部离场 —— 预览满帧、延迟有界
 class TitleBar;
 class MainWindow : public FramelessWindow
@@ -123,6 +123,7 @@ private:
     // 渲染帧率统计
     QElapsedTimer _renderClock;
     int _renderFrameCount = 0;
+    int _lastRenderVersion = -1;          // 版本去重：采集无新帧时跳过重绘（阶段02 性能项）
 };
 
 #endif  // MAINWINDOW_H

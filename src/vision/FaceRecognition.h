@@ -52,6 +52,14 @@ public:
 
     void setEnabled(bool enabled) { _enabled = enabled; }
 
+    // 最小可识别人脸边长透传（算法库幂等接口）。分析降采样时按比例缩小，
+    // 使"源帧 60px"的检测覆盖保持不变（阶段02 性能项）
+    void setMinFaceSize(int px)
+    {
+        QMutexLocker locker(&_mutex);
+        _algo.setMinFaceSize(px);
+    }
+
 signals:
     void faceRecognized(QString name, double similarity);
 

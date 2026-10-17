@@ -33,6 +33,10 @@ public:
 
     void shutdown();   // 线程安全：置位退出标志
 
+    // 分析降采样（阶段02 性能项）：HAAR/MOG2 计算量 ∝ 像素数，0.5x ≈ 1/4 耗时。
+    // start() 前调用一次（无并发）；检测结果坐标统一反缩放回源帧坐标系
+    void setAnalysisScale(double s) { _analysisScale = qBound(0.25, s, 1.0); }
+
 signals:
     void analysisReady(const AnalysisResult& result);
 
@@ -47,6 +51,7 @@ private:
     ObjectDetection* _object;
     IntrusionDetection* _intrusion;
     std::atomic<bool> _running{false};
+    double _analysisScale = 1.0;           // 分析分辨率缩放（1.0 = 全分辨率）
 };
 
 #endif // ANALYSISTHREAD_H

@@ -36,6 +36,7 @@ struct AnalysisResult {
     IntrusionResult intrusion;
     int processMs = 0;          // 本帧分析耗时
     int analysisFps = 0;        // 分析频率（约每秒刷新一次）
+    int dropsPerSec = 0;        // 帧覆盖率（阶段02）：每秒被覆盖式单槽丢弃、未经分析的帧数
 };
 
 Q_DECLARE_METATYPE(FaceResult)

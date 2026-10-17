@@ -129,16 +129,18 @@ void OverlayRenderer::paint(QImage& img,
     }
 
     // 诊断角标（FR-08）：右下角（顶部让位给告警横幅/禁区标签，避免重叠）
-    // 预览fps · 分析Hz · 分析耗时 · 帧龄（延迟）
+    // 预览fps · 采集fps · 分析Hz · 分析耗时 · 帧龄（延迟）· 丢帧率（帧覆盖率）
     if (hud.show) {
         const QString latency = hud.latencyMs >= 0
             ? QStringLiteral("%1ms").arg(hud.latencyMs)
             : QStringLiteral("—");
-        const QString txt = QStringLiteral("预览 %1fps · 分析 %2Hz · %3ms · 延迟 %4")
+        const QString txt = QStringLiteral("预览 %1 · 采集 %2 · 分析 %3Hz · %4ms · 延迟 %5 · 丢帧 %6/s")
                                 .arg(hud.renderFps)
+                                .arg(hud.captureFps)
                                 .arg(hud.analysisFps)
                                 .arg(hud.processMs)
-                                .arg(latency);
+                                .arg(latency)
+                                .arg(hud.dropsPerSec);
         QFont f = p.font();
         f.setPointSize(10);
         f.setBold(false);

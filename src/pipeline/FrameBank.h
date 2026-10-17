@@ -51,6 +51,14 @@ public:
         return _frame.empty();
     }
 
+    // 当前帧版本号（每次 store 递增）：渲染节拍按版本去重——
+    // 采集帧率低于渲染上限时不重复绘制同一帧（阶段02 性能项）
+    int version() const
+    {
+        QMutexLocker locker(&_mutex);
+        return _version;
+    }
+
     // 阻塞等待版本号超过 seenVersion 的新帧（最多 timeoutMs），取出最新帧。
     // 返回 false 表示超时无新帧（暂停/断流），调用方继续等待即可。
     bool waitForNew(int seenVersion, int timeoutMs, cv::Mat& out, int& newVersion)

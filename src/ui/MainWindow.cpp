@@ -50,7 +50,8 @@ MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
     // 源抽象与断流重连（D9）在采集线程内部完成，状态经 sourceStatus 回显日志栏
     _captureThread = new VideoCaptureThread(_frameBank, this);
     connect(_captureThread, &VideoCaptureThread::fpsChanged, this, [this](int fps) {
-        Q_UNUSED(fps) // 采集帧率仅用于日志；预览实际帧率由渲染节拍统计
+        // 跨线程 queued 信号 → GUI 线程写入；renderTick 同线程读取（诊断角标"采集"）
+        _hud.captureFps = fps;
     });
     connect(_captureThread, &VideoCaptureThread::sourceStatus, this, [this](const QString& msg) {
         _logLabel->setText(msg);
@@ -59,12 +60,20 @@ MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
     // 分析线程：FrameBank 最新帧 → 识别 → 结构化结果（队列信号回 GUI）
     _analysisThread = new AnalysisThread(_frameBank, _faceRecognizer, _objectDetector, _intrusionDetector, this);
     connect(_analysisThread, &AnalysisThread::analysisReady, this, &MainWindow::onAnalysisReady);
+
+    // 分析降采样（阶段02 性能项）：Analysis/scale 缺省 0.5 —— HAAR/MOG2 计算量 ∝ 像素数，
+    // 0.5x ≈ 1/4 耗时；检测框坐标反缩放回源帧，minFace 同比缩小保持检测覆盖不变。
+    // 置信度受轻微降采样影响时可在 ini 设 Analysis/scale=1.0 回退全分辨率
+    const double analysisScale = _settings->value("Analysis/scale", 0.5).toDouble();
+    _analysisThread->setAnalysisScale(analysisScale);
+    _faceRecognizer->setMinFaceSize(qMax(24, qRound(60 * analysisScale)));
     _analysisThread->start(QThread::LowPriority);   // 低于 GUI 优先级，重计算不影响界面响应
 
-    // 渲染节拍器：GUI 只做轻量绘制，30fps 定时从 FrameBank 取最新帧
+    // 渲染节拍器：GUI 只做轻量绘制，60Hz 定时从 FrameBank 取最新帧
+    // （版本去重：采集无新帧时不重绘，实际渲染帧率 = 采集帧率，见诊断角标）
     _renderTimer = new QTimer(this);
     connect(_renderTimer, &QTimer::timeout, this, &MainWindow::renderTick);
-    _renderTimer->start(33);
+    _renderTimer->start(16);
 
     _renderClock.start();
     _captureThread->startCapture(loadSourceConfig());   // V0.6：源配置持久化恢复
@@ -74,6 +83,13 @@ MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
 
 void MainWindow::renderTick()
 {
+    // 版本去重（阶段02 性能项）：采集无新帧时直接跳过——60Hz 节拍 × 30fps 相机的
+    // 场景下，一半节拍是同一帧的重复克隆+绘制+缩放，纯烧 CPU 无视觉收益
+    const int ver = _frameBank->version();
+    if (ver == _lastRenderVersion)
+        return;
+    _lastRenderVersion = ver;
+
     cv::Mat frame = _frameBank->load();
     if (frame.empty())
         return;                 // 无新帧（暂停/断流）→ 保持上一画面
@@ -110,6 +126,7 @@ void MainWindow::renderTick()
 
     QImage image(draw.data, draw.cols, draw.rows, draw.step, QImage::Format_BGR888);
     _hud.latencyMs = frameAgeMs;
+    _hud.dropsPerSec = result.dropsPerSec;   // 帧覆盖率可见化（阶段02）
     OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
 
     // 呈现帧模式推流（默认）：paint 后 draw 即标注帧，搭车喂给服务层
@@ -533,6 +550,10 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
         cfg.url = _settings->value("Source/url").toString();
     }
     cfg.usbIndex = _settings->value("Source/usbIndex", 0).toInt();
+    // 分辨率/帧率（阶段02 性能项）：60fps 需相机支持，驱动不支持时自动回落
+    cfg.width  = _settings->value("Source/width",  640).toInt();
+    cfg.height = _settings->value("Source/height", 480).toInt();
+    cfg.fps    = _settings->value("Source/fps",     30).toInt();
     return cfg;
 }
 
@@ -541,6 +562,9 @@ void MainWindow::saveSourceConfig(const VideoSourceConfig& cfg)
     _settings->setValue("Source/type", cfg.type == SourceType::RtspStream ? "rtsp" : "usb");
     _settings->setValue("Source/usbIndex", cfg.usbIndex);
     _settings->setValue("Source/url", cfg.url);
+    _settings->setValue("Source/width",  cfg.width);
+    _settings->setValue("Source/height", cfg.height);
+    _settings->setValue("Source/fps",    cfg.fps);
     _settings->sync();
 }
 
@@ -567,6 +591,28 @@ void MainWindow::showSourceDialog()
     connect(typeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg,
             [typeBox, urlEdit](int idx) { urlEdit->setEnabled(idx == 2); });
 
+    // 分辨率/帧率（阶段02 性能项，仅 USB 源生效；RTSP 帧率由服务端决定）
+    QComboBox* resBox = new QComboBox(&dlg);
+    resBox->addItem(QStringLiteral("640 × 480"), QSize(640, 480));
+    resBox->addItem(QStringLiteral("1280 × 720"), QSize(1280, 720));
+    resBox->addItem(QStringLiteral("1920 × 1080"), QSize(1920, 1080));
+    const QSize curRes(cur.width, cur.height);
+    const int resIdx = [&]{ for (int i = 0; i < resBox->count(); ++i)
+        if (resBox->itemData(i).toSize() == curRes) return i; return 0; }();
+    resBox->setCurrentIndex(resIdx);
+
+    QComboBox* fpsBox = new QComboBox(&dlg);
+    fpsBox->addItem(QStringLiteral("30 fps"), 30);
+    fpsBox->addItem(QStringLiteral("60 fps"), 60);
+    const int fpsIdx = fpsBox->findData(cur.fps);
+    fpsBox->setCurrentIndex(fpsIdx < 0 ? 0 : fpsIdx);
+    auto syncUsbOnly = [typeBox, resBox, fpsBox](int idx) {
+        resBox->setEnabled(idx != 2);
+        fpsBox->setEnabled(idx != 2);
+    };
+    connect(typeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg, syncUsbOnly);
+    syncUsbOnly(typeBox->currentIndex());
+
     QDialogButtonBox* btns = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     btns->button(QDialogButtonBox::Ok)->setText(QStringLiteral("应用"));
@@ -576,6 +622,8 @@ void MainWindow::showSourceDialog()
 
     form->addRow(QStringLiteral("源类型"), typeBox);
     form->addRow(QStringLiteral("RTSP 地址"), urlEdit);
+    form->addRow(QStringLiteral("分辨率（USB）"), resBox);
+    form->addRow(QStringLiteral("帧率（USB）"), fpsBox);
     form->addRow(btns);
 
     if (dlg.exec() != QDialog::Accepted)
@@ -592,6 +640,9 @@ void MainWindow::showSourceDialog()
     } else {
         cfg.usbIndex = typeBox->currentData().toInt();
     }
+    const QSize res = resBox->currentData().toSize();
+    cfg.width = res.width(); cfg.height = res.height();
+    cfg.fps = fpsBox->currentData().toInt();
 
     saveSourceConfig(cfg);
     updateSourceChip();           // 标题栏源 chip 同步

@@ -16,8 +16,10 @@ class OverlayRenderer
 public:
     struct Hud {
         int renderFps = 0;    // 实际预览渲染帧率
+        int captureFps = 0;   // 采集帧率（阶段02：与预览分离，相机实际帧率可见）
         int analysisFps = 0;  // 识别管线频率
         int processMs = 0;    // 最近一帧分析耗时
+        int dropsPerSec = 0;  // 帧覆盖率：每秒被丢弃未经分析的帧（阶段02）
         qint64 latencyMs = -1; // 帧龄：显示画面距采集的时长（FR-01 实时性核心指标）
         bool show = true;     // 诊断角标开关（FR-09）
     };

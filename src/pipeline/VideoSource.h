@@ -32,13 +32,17 @@ struct VideoSourceConfig
     SourceType type = SourceType::UsbCamera;
     int usbIndex = 0;
     QString url;                     // rtsp://user:pass@ip:554/...
+    int width  = 640;                // USB 采集分辨率/帧率（阶段02 性能项：可配置冲 60fps；
+    int height = 480;                //  相机不支持时驱动自动回落，实际帧率见诊断角标"采集"）
+    int fps    = 30;                 // RTSP 源忽略（帧率由服务端决定）
     int readTimeoutMs  = 3000;       // RTSP socket I/O 上界（建连/读帧共用）：断网时 read 有界返回，不挂线程
     int reconnectBaseMs = 500;       // D9 重连退避起点
     int reconnectMaxMs  = 8000;      // D9 重连退避上限
 
     bool operator==(const VideoSourceConfig& o) const
     {
-        return type == o.type && usbIndex == o.usbIndex && url == o.url;
+        return type == o.type && usbIndex == o.usbIndex && url == o.url
+            && width == o.width && height == o.height && fps == o.fps;
     }
     bool operator!=(const VideoSourceConfig& o) const { return !(*this == o); }
 };

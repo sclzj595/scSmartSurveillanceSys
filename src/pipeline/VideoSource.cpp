@@ -20,12 +20,14 @@ public:
         // （实测：同一摄像头 ffmpeg 直取 15fps 正常，OpenCV 缺省协商却 1fps 黑帧）。
         // 显式重协商 MJPG + 分辨率/帧率 + 单帧缓冲绕开坏路径；
         // 相机不支持某项时 set 返回 false 自动维持缺省，无副作用。
+        // 分辨率/帧率来自源配置（阶段02 性能项）：60fps 需相机支持，不支持时驱动回落
         _cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-        _cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
-        _cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
-        _cap.set(cv::CAP_PROP_FPS, 30);
+        _cap.set(cv::CAP_PROP_FRAME_WIDTH,  _cfg.width  > 0 ? _cfg.width  : 640);
+        _cap.set(cv::CAP_PROP_FRAME_HEIGHT, _cfg.height > 0 ? _cfg.height : 480);
+        _cap.set(cv::CAP_PROP_FPS,          _cfg.fps    > 0 ? _cfg.fps    : 30);
         _cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
         qInfo() << "USB source opened:"
+                << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
                 << "fps=" << _cap.get(cv::CAP_PROP_FPS)
                 << "fourcc=" << QString::number(
                        static_cast<int>(_cap.get(cv::CAP_PROP_FOURCC)), 16);
