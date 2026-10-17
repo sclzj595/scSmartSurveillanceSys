@@ -30,6 +30,11 @@ private:
     int _nextObjectId = 0;
     QMutex _mutex;
     const double _timeThreshold = 10000; // 10秒阈值
+    // 新目标确认（防噪点刷屏）：候选连续 N 帧出现才登记为正式目标。
+    // 无确认时 AE 微调/光照突变的单帧噪块会反复 "New object detected" 刷日志
+    std::map<int, std::pair<int, cv::Rect>> _candidateObjects;   // id → (连续帧数, 框)
+    const int _confirmFrames = 3;        // 连续 3 帧确认
+    const double _maxAreaRatio = 0.6;    // 轮廓超帧面积 60% → 整帧光照突变误检，丢弃
 };
 
 #endif  // OBJECTDETECTION_H

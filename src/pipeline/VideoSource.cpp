@@ -24,21 +24,24 @@ public:
         // 显式重协商 MJPG + 分辨率/帧率 + 单帧缓冲绕开坏路径；
         // 相机不支持某项时 set 返回 false 自动维持缺省，无副作用。
         // 分辨率/帧率来自源配置（阶段02 性能项）：60fps 需相机支持，不支持时驱动回落
-        _cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-        _cap.set(cv::CAP_PROP_FRAME_WIDTH,  _cfg.width  > 0 ? _cfg.width  : 640);
-        _cap.set(cv::CAP_PROP_FRAME_HEIGHT, _cfg.height > 0 ? _cfg.height : 480);
-        _cap.set(cv::CAP_PROP_FPS,          _cfg.fps    > 0 ? _cfg.fps    : 30);
-        _cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
         // 曝光控制（阶段02 实测项）：打开瞬间 AE 从高增益起点收敛 → 开头几秒过曝；
         // 逆光场景 AE 拉长曝光时间 → 帧率被压到个位数。DSHOW 后端 AUTO_EXPOSURE
         // 取菜单标志：0.75=自动连续，0.25=手动（再配 EXPOSURE=log2 秒）。
         // 驱动不支持某项时 set 返回 false 自动忽略，无副作用
+        // ⚠️ 必须先设曝光再设 FOURCC：DSHOW 下设置曝光属性会触发 capture pin
+        // 重连，媒体类型回退驱动缺省 YUY2（实测 fourcc 变 "YUY2"、~1fps 卡顿）——
+        // 顺序颠倒就是"加载特别慢 + Capture FPS: 0"的根因
         if (_cfg.autoExposure) {
             _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.75);   // 重申自动：让 AE 从当前场景重新收敛
         } else {
             _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.25);   // 手动：锁死快门（帧率与亮度双稳定）
             _cap.set(cv::CAP_PROP_EXPOSURE, _cfg.exposure);
         }
+        _cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        _cap.set(cv::CAP_PROP_FRAME_WIDTH,  _cfg.width  > 0 ? _cfg.width  : 640);
+        _cap.set(cv::CAP_PROP_FRAME_HEIGHT, _cfg.height > 0 ? _cfg.height : 480);
+        _cap.set(cv::CAP_PROP_FPS,          _cfg.fps    > 0 ? _cfg.fps    : 30);
+        _cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
         // 画质增强器（三段组合）：读帧路径逐帧应用，预览/分析/推流同帧受益
         _clahe.release();
         if (_cfg.enhance && _cfg.clipLimit > 1.0)
@@ -46,6 +49,10 @@ public:
         // 时域降噪基准复位（重开流 = 场景可能已变，重新收敛）
         _nrAcc.release();
         _nrPrevGray.release();
+        // 调色曲线缓存同步复位（场景变了，旧均值参考无效）
+        _gammaLut.release();
+        _lutGamma = _lutLift = -1;
+        _lastMean = -1;
         // 饱和补偿 LUT：HSV 的 S 通道整体乘系数（提亮后色彩回鲜），开器时建一次
         _satLut.release();
         if (_cfg.enhance && _cfg.saturation > 1.001) {
@@ -54,12 +61,20 @@ public:
                 lut.at<uchar>(i) = cv::saturate_cast<uchar>(i * _cfg.saturation);
             _satLut = lut;
         }
-        qInfo() << "USB source opened:"
-                << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
-                << "fps=" << _cap.get(cv::CAP_PROP_FPS)
-                << "autoExp=" << _cfg.autoExposure
-                << "fourcc=" << QString::number(
-                       static_cast<int>(_cap.get(cv::CAP_PROP_FOURCC)), 16);
+        // 协商结果核验：fourcc 转可读字符，非 MJPG 立即告警（YUY2 → ~1fps 教训）
+        {
+            const qint64 fcc = static_cast<qint64>(_cap.get(cv::CAP_PROP_FOURCC));
+            char fccStr[5] = { char(fcc & 0xFF), char((fcc >> 8) & 0xFF),
+                               char((fcc >> 16) & 0xFF), char((fcc >> 24) & 0xFF), 0 };
+            if (qstrncmp(fccStr, "MJPG", 4) != 0)
+                qWarning() << "[VideoSource] MJPG negotiation FAILED, got" << fccStr
+                           << "— expect very low fps on USB2 bandwidth!";
+            qInfo() << "USB source opened:"
+                    << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
+                    << "fps=" << _cap.get(cv::CAP_PROP_FPS)
+                    << "autoExp=" << _cfg.autoExposure
+                    << "fourcc=" << fccStr;
+        }
         if (_cfg.autoExposure)
             warmUpAutoExposure();   // 冲掉 AE 收敛期的过曝帧（用户实测"刚开启过曝"）
         return true;
@@ -104,23 +119,41 @@ private:
         //    lut[i] = lift + (255-lift) * (i/255)^gamma
         //    —— 黑位抬起（暗部成深灰不死黑，背景细节显现）+ gamma 拉中间调；
         //    gamma 按全帧均值自适应到目标亮度，只提亮不压暗
+        //    ⚠️ LUT 缓存：均值波动 < 3 时复用上一帧曲线。逐帧重算会让输出
+        //    亮度帧间抖动 → MOG2 背景模型整体失效 → 整帧被当前景（实测
+        //    "New object detected 0,0 320x240" 刷屏）
         if (_cfg.gammaTarget > 0 || _cfg.blackLift > 0.5) {
             const cv::Scalar s = cv::mean(out);
             const double mean = (s[0] + s[1] + s[2]) / 3.0;
-            double gamma = 1.0;
-            if (_cfg.gammaTarget > 0 && mean > 1.0 && mean < _cfg.gammaTarget) {
-                gamma = std::log(_cfg.gammaTarget / 255.0) / std::log(mean / 255.0);
-                gamma = qBound(0.70, gamma, 1.0);
-            }
-            const double lift = qBound(0.0, _cfg.blackLift, 64.0);
-            if (gamma < 0.995 || lift > 0.5) {
-                cv::Mat lut(1, 256, CV_8UC1);
-                for (int i = 0; i < 256; ++i) {
-                    const double v = lift + (255.0 - lift)
-                                   * std::pow(i / 255.0, gamma);
-                    lut.at<uchar>(i) = cv::saturate_cast<uchar>(v);
+            const bool cfgStable = qFuzzyCompare(_lutGamma, _cfg.gammaTarget)
+                                && qFuzzyCompare(_lutLift, _cfg.blackLift);
+            if (cfgStable && !_gammaLut.empty()
+                && _lastMean > 0 && qAbs(mean - _lastMean) < 3.0) {
+                cv::LUT(out, _gammaLut, out);   // 复用缓存曲线
+                _lastMean = mean;               // 均值随光照缓变，跨出 ±3 带才重算
+            } else {
+                double gamma = 1.0;
+                if (_cfg.gammaTarget > 0 && mean > 1.0 && mean < _cfg.gammaTarget) {
+                    gamma = std::log(_cfg.gammaTarget / 255.0) / std::log(mean / 255.0);
+                    gamma = qBound(0.70, gamma, 1.0);
                 }
-                cv::LUT(out, lut, out);
+                const double lift = qBound(0.0, _cfg.blackLift, 64.0);
+                if (gamma < 0.995 || lift > 0.5) {
+                    cv::Mat lut(1, 256, CV_8UC1);
+                    for (int i = 0; i < 256; ++i) {
+                        const double v = lift + (255.0 - lift)
+                                       * std::pow(i / 255.0, gamma);
+                        lut.at<uchar>(i) = cv::saturate_cast<uchar>(v);
+                    }
+                    cv::LUT(out, lut, out);
+                    _gammaLut = lut;            // 记住本帧曲线与均值
+                    _lutGamma = _cfg.gammaTarget;
+                    _lutLift   = lift;
+                } else {
+                    _gammaLut.release();        // 曲线退化为恒等 → 清缓存
+                    _lutLift = 0;
+                }
+                _lastMean = mean;
             }
         }
         // 2) 轻度 CLAHE：只调 LAB 亮度通道，补局部小反差（暗角里的脸），主亮度不靠它
@@ -231,6 +264,10 @@ private:
     cv::Mat _satLut;             // 饱和补偿 LUT（空 = 不补偿）
     cv::Mat _nrAcc;              // 时域降噪累加器（CV_32F）
     cv::Mat _nrPrevGray;         // 上一帧灰度（运动掩膜参考，单通道）
+    cv::Mat _gammaLut;           // 调色曲线缓存（帧间稳定，防 MOG2 整帧误检）
+    double _lutGamma = -1;       // 缓存曲线对应的 gammaTarget 配置值
+    double _lutLift = -1;        // 缓存曲线对应的实际 lift
+    double _lastMean = -1;       // 上一帧全帧均值（±3 复用带）
 };
 
 // RTSP 网络流：FFMPEG 后端 + socket 超时。
