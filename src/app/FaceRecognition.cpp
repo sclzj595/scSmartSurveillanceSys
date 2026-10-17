@@ -2,6 +2,10 @@
 #include "FaceRecognition.h"
 #include <QDebug>
 #include <QMutexLocker>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 FaceRecognition::FaceRecognition(QObject *parent) : QObject(parent)
 {
@@ -12,6 +16,14 @@ FaceRecognition::FaceRecognition(QObject *parent) : QObject(parent)
         qInfo() << "Face cascade loaded successfully.";
     }
     _algo.setKnownThreshold(DataConfig::faceConfidenceThreshold());
+
+    // D6：优先恢复持久化档案（模型 + label→姓名）。恢复成功则内置样本不再加载，
+    // label 空间以档案为准，避免预设样本与持久化 label 冲突
+    if (loadArchive()) {
+        qInfo() << "Face archive restored:" << _labelMap.size() << "persons,"
+                << _algo.sampleCount(_labelMap.begin()->first) << "+ samples";
+        return;
+    }
 
     // 预置内置样本（与历史行为一致：qrc 资源缺失时静默跳过，不影响运行）
     const int personCount = 5;
@@ -91,8 +103,61 @@ bool FaceRecognition::commitRegister(const cv::Mat& grayFace, const QString& nam
         return false;
 
     _labelMap[label] = trimmed;
+
+    // D6：注册即落盘（模型 + 标签映射），重启后档案自动恢复
+    if (!saveArchive())
+        qWarning() << "Face archive save failed (registration kept in memory):" << trimmed;
+
     qInfo() << "Registered face:" << trimmed << "(Label:" << label
             << ") Samples:" << _algo.sampleCount(label);
+    return true;
+}
+
+// ---- 档案持久化（D6 / V0.5）----
+// 模型 YAML：labels 与 descs 两条平行序列（FaceAlgorithm 内部存取）
+// 标签映射：JSON 数组 [{label, name}]，与 YAML 的 label 空间一一对应
+bool FaceRecognition::loadArchive()
+{
+    if (!_algo.loadModel(DataConfig::faceModelPath().toStdString()))
+        return false;
+
+    QFile f(DataConfig::faceLabelsPath());
+    if (!f.open(QIODevice::ReadOnly))
+        return false;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    if (!doc.isArray())
+        return false;
+
+    std::map<int, QString> restored;
+    for (const QJsonValue& v : doc.array()) {
+        const QJsonObject o = v.toObject();
+        const int label = o.value("label").toInt(-1);
+        const QString name = o.value("name").toString();
+        if (label >= 0 && !name.isEmpty())
+            restored[label] = name;
+    }
+    if (restored.empty())
+        return false;               // 空档案视为未恢复，走内置样本路径
+    _labelMap = std::move(restored);
+    return true;
+}
+
+bool FaceRecognition::saveArchive()   // 前置条件：_mutex 已持有
+{
+    if (!_algo.saveModel(DataConfig::faceModelPath().toStdString()))
+        return false;
+
+    QJsonArray arr;
+    for (const auto& pair : _labelMap) {
+        QJsonObject o;
+        o.insert("label", pair.first);
+        o.insert("name", pair.second);
+        arr.append(o);
+    }
+    QFile f(DataConfig::faceLabelsPath());
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    f.write(QJsonDocument(arr).toJson());
     return true;
 }
 

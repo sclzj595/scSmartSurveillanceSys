@@ -22,6 +22,7 @@
 #include <QMutex>
 #include <QElapsedTimer>
 #include <QVector>
+#include <QRubberBand>
 
 // 线程模型（FR-01 异步识别管线）：
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
@@ -40,7 +41,6 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
-
 private slots:
     void updateVideoFrame(const QImage &image);
     void toggleTheme();
@@ -73,9 +73,13 @@ private:
     ObjectDetection* _objectDetector;
 
     // 禁区绘制相关
+    // 坐标链（D5 修复）：MainWindow 鼠标坐标 → mapFrom 映射到 label 局部 →
+    // 按 KeepAspectRatio 反缩放 + 居中留边补偿 → 源帧坐标（分析/渲染/存证统一空间）
     bool _drawingForbiddenZone = false;
     QPoint _zoneStart;
     QPoint _zoneEnd;
+    QRubberBand* _rubberBand = nullptr;                      // 绘制预览（label 局部坐标）
+    cv::Rect mapRectToFrame(const QRect& labelRect) const;   // label 坐标 → 源帧坐标
 
     // 管线数据
     FrameBank* _frameBank = nullptr;      // 采集 → {渲染, 分析} 的唯一帧通道

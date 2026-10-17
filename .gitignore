@@ -34,3 +34,5 @@ Desktop.ini
 # ===== 运行时数据（事件存证，PRD 10.1，属用户数据不入库）=====
 events/
 sys_param.ini
+face_model.yml
+face_labels.json

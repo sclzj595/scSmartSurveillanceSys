@@ -22,6 +22,11 @@ public:
     static QString eventsRoot() {
         return "./events";
     }
+
+    // 人脸档案持久化（D6 / V0.5）：模型 YAML（FaceAlgorithm 存取）+ label→姓名 JSON
+    // 属运行时数据不入 Git（.gitignore 已收录）
+    static QString faceModelPath()  { return "./face_model.yml"; }
+    static QString faceLabelsPath() { return "./face_labels.json"; }
 };
 
 #endif // DATACONFIG_H

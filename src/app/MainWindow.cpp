@@ -194,6 +194,7 @@ void MainWindow::initUI()
     _videoLabel->setAlignment(Qt::AlignCenter);      // 居中
     _videoLabel->setMinimumSize(640, 480);
     _videoLabel->setObjectName("videoLabel");        // 等会便于管理
+    _rubberBand = new QRubberBand(QRubberBand::Rectangle, _videoLabel);  // 禁区绘制预览
     mainLayout->addWidget(_videoLabel, 8);
 
     // 日志
@@ -457,9 +458,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     if (_forbiddenZoneBtn->isChecked() && event->button() == Qt::LeftButton) {
+        // 仅在视频区域内开始绘制（D5：鼠标坐标属 MainWindow，须映射到 label 局部）
+        if (!_videoLabel->geometry().contains(event->pos()))
+            return;
         _drawingForbiddenZone = true;
         _zoneStart = event->pos();
         _zoneEnd = event->pos();
+        const QPoint p = _videoLabel->mapFrom(this, _zoneStart);
+        _rubberBand->setGeometry(QRect(p, p));
+        _rubberBand->show();
     }
 }
 
@@ -467,7 +474,9 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
     if (_drawingForbiddenZone) {
         _zoneEnd = event->pos();
-        update(); // 触发重绘
+        _rubberBand->setGeometry(QRect(
+            _videoLabel->mapFrom(this, _zoneStart),
+            _videoLabel->mapFrom(this, _zoneEnd)).normalized());
     }
 }
 
@@ -476,32 +485,46 @@ void MainWindow::mouseReleaseEvent(QMouseEvent *event)
     if (_drawingForbiddenZone && event->button() == Qt::LeftButton) {
         _drawingForbiddenZone = false;
         _forbiddenZoneBtn->setChecked(false);
-        
-        // 计算禁区坐标
-        QRect videoRect = _videoLabel->rect();
-        QPoint adjustedStart = QPoint(
-            _zoneStart.x() - videoRect.x(),
-            _zoneStart.y() - videoRect.y()
-        );
-        QPoint adjustedEnd = QPoint(
-            _zoneEnd.x() - videoRect.x(),
-            _zoneEnd.y() - videoRect.y()
-        );
-        
-        // 设置禁区
-        cv::Rect zone(
-            std::min(adjustedStart.x(), adjustedEnd.x()),
-            std::min(adjustedStart.y(), adjustedEnd.y()),
-            std::abs(adjustedEnd.x() - adjustedStart.x()),
-            std::abs(adjustedEnd.y() - adjustedStart.y())
-        );
-        
+        _rubberBand->hide();
+
+        // D5：label 局部矩形 → 源帧坐标（分析/渲染/存证统一空间）
+        const QRect labelRect = QRect(
+            _videoLabel->mapFrom(this, _zoneStart),
+            _videoLabel->mapFrom(this, _zoneEnd)).normalized();
+        const cv::Rect zone = mapRectToFrame(labelRect);
+        if (zone.empty()) {
+            _logLabel->setText("禁区设置失败：无有效画面或选区过小");
+            return;
+        }
         _intrusionDetector->setForbiddenZone(zone);
-        
-        // 更新日志
-        _logLabel->setText(QString("禁区设置: (%1,%2) %3x%4")
+        _logLabel->setText(QString("禁区设置（源帧坐标）: (%1,%2) %3x%4")
             .arg(zone.x).arg(zone.y).arg(zone.width).arg(zone.height));
     }
+}
+
+// label 坐标 → 源帧坐标（D5 修复核心）：
+// updateVideoFrame 将源帧 KeepAspectRatio 缩放进 label，QLabel 默认居中显示，
+// 因此 label 内像素 = 缩放后画面 + 居中偏移；反变换 = 减偏移再除缩放比
+cv::Rect MainWindow::mapRectToFrame(const QRect& r) const
+{
+    const QPixmap* pmPtr = _videoLabel->pixmap();
+    if (!pmPtr || pmPtr->isNull() || _lastFrame.empty())
+        return cv::Rect();
+    const QPixmap& pm = *pmPtr;
+
+    const double sx = double(_lastFrame.cols) / pm.width();
+    const double sy = double(_lastFrame.rows) / pm.height();
+    const double offX = double(_videoLabel->width()  - pm.width())  / 2.0;
+    const double offY = double(_videoLabel->height() - pm.height()) / 2.0;
+
+    auto clampi = [](int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); };
+    const int x1 = clampi(int((r.left()   - offX) * sx), 0, _lastFrame.cols - 1);
+    const int y1 = clampi(int((r.top()    - offY) * sy), 0, _lastFrame.rows - 1);
+    const int x2 = clampi(int((r.right() + 1 - offX) * sx), 0, _lastFrame.cols);
+    const int y2 = clampi(int((r.bottom() + 1 - offY) * sy), 0, _lastFrame.rows);
+    if (x2 - x1 < 8 || y2 - y1 < 8)   // 过小选区视为误触
+        return cv::Rect();
+    return cv::Rect(x1, y1, x2 - x1, y2 - y1);
 }
 
 void MainWindow::updateVideoFrame(const QImage &image) {

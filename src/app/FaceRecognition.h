@@ -59,6 +59,10 @@ private:
     // 前置条件：_mutex 已持有
     QString suggestedNameLocked() const;
 
+    // 档案持久化（D6 / V0.5）：模型 YAML 走 FaceAlgorithm 存取，label→姓名 JSON 走本类
+    bool loadArchive();      // 启动时恢复（构造期，无并发）
+    bool saveArchive();      // 注册后落盘（调用方须持锁）
+
     falgo::FaceAlgorithm _algo;          // 可插拔算法库实例（内部自互斥）
     std::map<int, QString> _labelMap;    // 业务侧：label → 姓名（算法库不知姓名概念）
     bool _enabled = false;               // 与界面默认"人脸识别: 关闭"一致
