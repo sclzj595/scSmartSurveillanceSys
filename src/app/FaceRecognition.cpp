@@ -28,14 +28,39 @@ cv::Mat FaceRecognition::LBPHRecognizer::computeLBP(const cv::Mat& src) const {
     return dst;
 }
 
+// 网格直方图描述子：LBP 图 4x4 网格，每格 256 维 L1 归一化直方图，拼接为 1x4096 CV_32F
+// 相比逐像素 L2（对姿态/光照极端敏感、阈值无法标定），直方图比对是 LBPH 的标准形态
+cv::Mat FaceRecognition::LBPHRecognizer::describe(const cv::Mat& gray100) const {
+    const cv::Mat lbp = computeLBP(gray100);          // 98x98
+    const int cells = 4;
+    const int bins = 256;
+    const int cellW = lbp.cols / cells;
+    const int cellH = lbp.rows / cells;
+    cv::Mat desc = cv::Mat::zeros(1, cells * cells * bins, CV_32F);
+    for (int cy = 0; cy < cells; ++cy) {
+        for (int cx = 0; cx < cells; ++cx) {
+            const int base = (cy * cells + cx) * bins;
+            cv::Mat cellHist = desc(cv::Rect(base, 0, bins, 1));
+            const cv::Mat cell = lbp(cv::Rect(cx * cellW, cy * cellH, cellW, cellH));
+            for (int y = 0; y < cell.rows; ++y) {
+                const uchar* p = cell.ptr<uchar>(y);
+                for (int x = 0; x < cell.cols; ++x)
+                    cellHist.at<float>(p[x]) += 1.f;
+            }
+            const double s = cv::sum(cellHist)[0];
+            if (s > 0) cellHist /= static_cast<float>(s);
+        }
+    }
+    return desc;
+}
+
 void FaceRecognition::LBPHRecognizer::train(
     const std::vector<cv::Mat>& images,
     const std::vector<int>& labels)
 {
     for(size_t i = 0; i < images.size(); i++) {
-        // 存储与 predict 同口径的 LBP 特征（98x98），而非原始灰度图。
-        // 否则 cv::norm(98x98, 100x100) 尺寸不匹配 → cv::Exception → 进程崩溃
-        _model[labels[i]].push_back(computeLBP(images[i]));
+        // 存储网格直方图描述子（与 predict 同口径），杜绝尺寸/口径不一致导致的异常
+        _model[labels[i]].push_back(describe(images[i]));
     }
 }
 
@@ -46,18 +71,16 @@ void FaceRecognition::LBPHRecognizer::predict(
 {
     label = -1;
     confidence = DBL_MAX;
-    if (src.rows < 3 || src.cols < 3) return;
+    if (src.rows < 8 || src.cols < 8) return;
 
-    cv::Mat lbpSrc = computeLBP(src);
+    const cv::Mat query = describe(src);
 
-    // 使用迭代器遍历
     for(auto it = _model.begin(); it != _model.end(); ++it) {
         const std::vector<cv::Mat>& samples = it->second;
         for(const cv::Mat& sample : samples) {
-            // 防御：尺寸不一致的历史样本直接跳过，绝不让 cv::norm 抛异常
-            if(sample.empty() || sample.size() != lbpSrc.size())
+            if(sample.empty() || sample.size() != query.size())
                 continue;
-            double dist = cv::norm(lbpSrc, sample, cv::NORM_L2);
+            const double dist = cv::norm(query, sample, cv::NORM_L2);
             if(dist < confidence) {
                 confidence = dist;
                 label = it->first;
@@ -106,12 +129,13 @@ FaceRecognition::FaceRecognition(QObject *parent) : QObject(parent)
 
 FaceRecognition::~FaceRecognition() {}
 
-// L2 距离 → 0~100% 相似度（R1 口径：越高越相似；无效结果显示 -1，界面呈现"—"）
+// 网格直方图 L2 距离 → 0~100% 相似度（R1 口径：越高越相似；无效结果 -1，界面呈现"—"）
+// 距离值域 0~5.66：0=完全一致；≥3.33 映射为 0%。经验：同人 <1.5（>55%），异人 >2.5（<25%）
 static double similarityFromDistance(double dist)
 {
     if (dist >= 1.0e15)
         return -1.0;                 // 无样本/无效结果（predict 返回 DBL_MAX）
-    double sim = 100.0 - dist;       // LBPH L2 距离经验范围 0~100+
+    double sim = 100.0 - dist * 30.0;
     return std::max(0.0, std::min(100.0, sim));
 }
 
@@ -151,7 +175,7 @@ void FaceRecognition::analyze(const cv::Mat& frame, std::vector<FaceResult>& out
             _recognizer.predict(processedFace, label, confidence);
 
             fr.similarity = similarityFromDistance(confidence);
-            if(confidence <= DataConfig::faceConfidenceThreshold() &&
+            if(fr.similarity >= DataConfig::faceConfidenceThreshold() &&
                _labelMap.find(label) != _labelMap.end()) {
                 fr.known = true;
                 fr.name = _labelMap[label];

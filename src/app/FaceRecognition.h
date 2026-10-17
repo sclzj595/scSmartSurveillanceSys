@@ -54,10 +54,13 @@ private:
     public:
         LBPHRecognizer();
         cv::Mat computeLBP(const cv::Mat& src) const;
+        // 网格直方图描述子：LBP 图 4x4 网格 × 每格 256 维归一化直方图 → 1x4096 CV_32F
+        // 距离值域 0~sqrt(16*2)≈5.66，同一个人通常 <1.5，不同人 >2.5
+        cv::Mat describe(const cv::Mat& gray100) const;
         void train(const std::vector<cv::Mat>& images, const std::vector<int>& labels);
         void predict(const cv::Mat& src, int& label, double& confidence) const;
     private:
-        std::map<int, std::vector<cv::Mat>> _model;
+        std::map<int, std::vector<cv::Mat>> _model;   // 存储 describe() 描述子（非原始图）
     };
 
     // 以下方法都必须在持有 _mutex 时调用

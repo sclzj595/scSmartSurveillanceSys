@@ -75,7 +75,11 @@ void OverlayRenderer::paint(QImage& img,
             const QColor yellow(0xea, 0xb3, 0x08);
             p.setPen(QPen(yellow, 2));
             p.drawRect(qr);
-            drawLabel(p, qr, QStringLiteral("陌生人"), yellow);
+            // 附相似度便于阈值标定（R1：相似度口径统一为 %）
+            const QString label = face.similarity >= 0
+                ? QStringLiteral("陌生人 %1%").arg(face.similarity, 0, 'f', 0)
+                : QStringLiteral("陌生人");
+            drawLabel(p, qr, label, yellow);
         }
     }
 

@@ -12,8 +12,10 @@ public:
         // return "D:/CODE_cpp/SmartSurveillance/resources/haarcascade_frontalface_default.xml";
     }
     
+    // 命中档案的最小相似度（%）。网格直方图 LBPH 经验值：同人 >55%，异人 <25%
+    // 标定方法：观察陌生人标签上显示的相似度%，在本值与同人实测值之间取中
     static double faceConfidenceThreshold() {
-        return 100.0;
+        return 55.0;
     }
 };
 
