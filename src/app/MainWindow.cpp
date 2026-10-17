@@ -11,6 +11,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QLineEdit>
+#include <QComboBox>
+#include <QFormLayout>
 #include <QDateTime>
 #include "EventHistoryDialog.h"
 
@@ -41,10 +43,14 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
         _logLabel->setText(QStringLiteral("事件存证异常（识别不受影响）：%1").arg(msg));
     });
 
-    // 采集线程：摄像头 → FrameBank（覆盖式写入，永不阻塞）
+    // 采集线程：视频源 → FrameBank（覆盖式写入，永不阻塞）
+    // 源抽象与断流重连（D9）在采集线程内部完成，状态经 sourceStatus 回显日志栏
     _captureThread = new VideoCaptureThread(_frameBank, this);
     connect(_captureThread, &VideoCaptureThread::fpsChanged, this, [this](int fps) {
         Q_UNUSED(fps) // 采集帧率仅用于日志；预览实际帧率由渲染节拍统计
+    });
+    connect(_captureThread, &VideoCaptureThread::sourceStatus, this, [this](const QString& msg) {
+        _logLabel->setText(msg);
     });
 
     // 分析线程：FrameBank 最新帧 → 识别 → 结构化结果（队列信号回 GUI）
@@ -58,7 +64,7 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
     _renderTimer->start(33);
 
     _renderClock.start();
-    _captureThread->startCapture(0);
+    _captureThread->startCapture(loadSourceConfig());   // V0.6：源配置持久化恢复
 
     initMediaLink();   // 独立服务层（PRD 第 9 章）：HTTP 数据服务随启动开启
 }
@@ -375,6 +381,11 @@ void MainWindow::initUI()
     });
     btnLayout->addWidget(_streamBtn);
 
+    // 视频源切换（V0.6：统一源接口，USB / RTSP 即插即用）
+    _sourceBtn = new QPushButton(QStringLiteral("切换视频源"), this);
+    connect(_sourceBtn, &QPushButton::clicked, this, &MainWindow::showSourceDialog);
+    btnLayout->addWidget(_sourceBtn);
+
     // 主布局里面加按钮布局
     mainLayout->addLayout(btnLayout);
 
@@ -415,6 +426,81 @@ void MainWindow::initMediaLink()
             "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）"));
     else
         _logLabel->setText(QStringLiteral("HTTP :8080 端口被占用，数据服务未开启"));
+}
+
+VideoSourceConfig MainWindow::loadSourceConfig() const
+{
+    VideoSourceConfig cfg;
+    const QString t = _settings->value("Source/type", "usb").toString();
+    if (t == "rtsp") {
+        cfg.type = SourceType::RtspStream;
+        cfg.url = _settings->value("Source/url").toString();
+    }
+    cfg.usbIndex = _settings->value("Source/usbIndex", 0).toInt();
+    return cfg;
+}
+
+void MainWindow::saveSourceConfig(const VideoSourceConfig& cfg)
+{
+    _settings->setValue("Source/type", cfg.type == SourceType::RtspStream ? "rtsp" : "usb");
+    _settings->setValue("Source/usbIndex", cfg.usbIndex);
+    _settings->setValue("Source/url", cfg.url);
+    _settings->sync();
+}
+
+void MainWindow::showSourceDialog()
+{
+    const VideoSourceConfig cur = loadSourceConfig();
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("切换视频源"));
+    dlg.setMinimumWidth(360);
+    auto* form = new QFormLayout(&dlg);
+
+    QComboBox* typeBox = new QComboBox(&dlg);
+    typeBox->addItem(QStringLiteral("USB 摄像头 0"), 0);
+    typeBox->addItem(QStringLiteral("USB 摄像头 1"), 1);
+    typeBox->addItem(QStringLiteral("RTSP 网络流"), 2);
+    typeBox->setCurrentIndex(cur.type == SourceType::RtspStream ? 2
+                            : qBound(0, cur.usbIndex, 1));
+
+    QLineEdit* urlEdit = new QLineEdit(cur.url, &dlg);
+    urlEdit->setPlaceholderText(QStringLiteral("rtsp://user:pass@192.168.1.64:554/stream1"));
+    urlEdit->setEnabled(cur.type == SourceType::RtspStream);
+    connect(typeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), &dlg,
+            [typeBox, urlEdit](int idx) { urlEdit->setEnabled(idx == 2); });
+
+    QDialogButtonBox* btns = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    btns->button(QDialogButtonBox::Ok)->setText(QStringLiteral("应用"));
+    btns->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
+    connect(btns, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(btns, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    form->addRow(QStringLiteral("源类型"), typeBox);
+    form->addRow(QStringLiteral("RTSP 地址"), urlEdit);
+    form->addRow(btns);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    VideoSourceConfig cfg;
+    if (typeBox->currentIndex() == 2) {
+        cfg.type = SourceType::RtspStream;
+        cfg.url = urlEdit->text().trimmed();
+        if (cfg.url.isEmpty()) {
+            _logLabel->setText(QStringLiteral("RTSP 地址为空，未切换"));
+            return;
+        }
+    } else {
+        cfg.usbIndex = typeBox->currentData().toInt();
+    }
+
+    saveSourceConfig(cfg);
+    if (_captureThread->switchSource(cfg))
+        _logLabel->setText(QStringLiteral("视频源切换中…"));   // 后续状态经 sourceStatus 回显
+    else
+        _logLabel->setText(QStringLiteral("视频源切换失败：采集线程未就绪"));
 }
 
 void MainWindow::applyTheme(const QString &theme)

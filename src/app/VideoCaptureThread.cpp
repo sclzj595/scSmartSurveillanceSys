@@ -4,7 +4,7 @@
 #include <QDebug>
 
 VideoCaptureThread::VideoCaptureThread(FrameBank* frameBank, QObject *parent)
-    : QThread(parent), _bank(frameBank), _isPaused(false), _cameraIndex(0),
+    : QThread(parent), _bank(frameBank), _isPaused(false),
       _frameCount(0), _startTime(0)
 {}
 
@@ -12,34 +12,36 @@ VideoCaptureThread::~VideoCaptureThread() {
     stopCapture();
 }
 
-void VideoCaptureThread::startCapture(int cameraIndex) {
+bool VideoCaptureThread::startCapture(const VideoSourceConfig& cfg) {
     QMutexLocker locker(&_mutex);
-    if (!_isRunning) {
-        _cap.open(cameraIndex, cv::CAP_DSHOW); // 使用DirectShow API获取摄像头
-
-        if (_cap.isOpened()) {
-            _isRunning = true;
-            _isPaused = false;
-            _cameraIndex = cameraIndex;
-            _frameCount = 0;
-            _startTime = QDateTime::currentMSecsSinceEpoch();
-            start();
-            qInfo() << "Video capture started for camera" << cameraIndex;
-        } else {
-            qWarning() << "Failed to open camera" << cameraIndex;
-        }
-    }
+    if (_isRunning)
+        return false;
+    _config = cfg;
+    _isPaused = false;
+    _frameCount = 0;
+    _startTime = QDateTime::currentMSecsSinceEpoch();
+    _isRunning = true;
+    start();
+    qInfo() << "Video capture requested, source type =" << int(cfg.type);
+    return true;
 }
 
 void VideoCaptureThread::stopCapture() {
     if (_isRunning) {
-        {
-            QMutexLocker locker(&_mutex);
-            _isRunning = false;
-        }
-        wait(2000);   // 设备释放移入 run() 退出路径，杜绝并发 release 竞态
+        _isRunning = false;
+        // run() 的 read 受 RTSP readTimeoutMs(3s) 上界约束，join 需覆盖
+        // "一次 read + 收尾释放"，否则旧线程未退出就换源会双线程并存
+        if (!wait(8000))
+            qWarning() << "Capture thread did not exit within 8s";
         qInfo() << "Video capture stopped";
     }
+}
+
+bool VideoCaptureThread::switchSource(const VideoSourceConfig& cfg) {
+    if (cfg == _config && _isRunning)
+        return true;          // 同源重复切换：幂等返回，避免无谓断流
+    stopCapture();
+    return startCapture(cfg);
 }
 
 void VideoCaptureThread::pause() {
@@ -55,28 +57,64 @@ void VideoCaptureThread::resume() {
 }
 
 void VideoCaptureThread::run() {
+    const QString srcDesc = [] (const VideoSourceConfig& c) {
+        // describe() 需要实例；此处先给配置级描述，open 成功后以实例描述为准
+        return c.type == SourceType::RtspStream
+            ? QStringLiteral("RTSP 流") : QStringLiteral("USB 摄像头 %1").arg(c.usbIndex);
+    } (_config);
+
+    _source = createVideoSource(_config);
+    if (!_source) {
+        emit sourceStatus(QStringLiteral("视频源配置无效，采集未启动"));
+        _isRunning = false;
+        return;
+    }
+
+    emit sourceStatus(QStringLiteral("正在打开 %1 …").arg(srcDesc));
+    if (_source->open())
+        emit sourceStatus(QStringLiteral("已接入 %1").arg(srcDesc));
+    else
+        emit sourceStatus(QStringLiteral("%1 打开失败，自动重连中…").arg(srcDesc));
+
     cv::Mat frame;
+    int backoff = _config.reconnectBaseMs;
+
     while (_isRunning) {
         {
             QMutexLocker locker(&_mutex);
             if (!_isRunning) break;
             if (_isPaused) {
-                // 暂停期间持续 grab 丢弃缓冲帧：恢复时直接从最新帧继续（FR-02 / 修复D8）
-                if (_cap.isOpened())
-                    _cap.grab();
+                // 暂停期间持续取帧丢弃：恢复时直接从最新帧继续（FR-02 / 修复D8）；
+                // RTSP 下还兼具清空网络缓冲、防止服务端堆积的作用
+                cv::Mat discard;
+                if (_source) _source->read(discard);
                 locker.unlock();
                 msleep(10);
                 continue;
             }
-            _cap >> frame;
         }
 
-        if (frame.empty()) {
-            // 重连摄像头
-            if (!_cap.isOpened()) {
-                _cap.open(_cameraIndex, cv::CAP_DSHOW);
+        const bool got = _source->read(frame) && !frame.empty();
+        if (!got) {
+            // ---- D9 断流恢复：close → 指数退避 → 重开（USB 拔插 / RTSP 断网统一路径）----
+            emit sourceStatus(QStringLiteral(
+                "%1 信号丢失，%2 ms 后重连…").arg(srcDesc).arg(backoff));
+            qWarning() << "Capture source lost, reconnect backoff" << backoff << "ms";
+            _source->close();
+
+            // 退避等待拆成小片，保证 stopCapture 能及时汇合
+            const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + backoff;
+            while (_isRunning && QDateTime::currentMSecsSinceEpoch() < deadline)
+                msleep(20);
+            if (!_isRunning) break;
+
+            if (_source->open()) {
+                backoff = _config.reconnectBaseMs;
+                emit sourceStatus(QStringLiteral("%1 重连成功").arg(srcDesc));
+                qInfo() << "Capture source reconnected";
+            } else {
+                backoff = qMin(backoff * 2, _config.reconnectMaxMs);
             }
-            msleep(30);
             continue;
         }
 
@@ -97,11 +135,9 @@ void VideoCaptureThread::run() {
             _bank->store(frame);
     }
 
-    // 设备释放收尾：避免 stopCapture 与 run() 并发访问 _cap 导致崩溃
-    {
-        QMutexLocker locker(&_mutex);
-        if (_cap.isOpened()) {
-            _cap.release();
-        }
+    // 设备释放收尾：stopCapture 不碰源对象，全部释放集中在此（避免竞态）
+    if (_source) {
+        _source->close();
+        _source.reset();
     }
 }

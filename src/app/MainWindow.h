@@ -53,6 +53,11 @@ private:
     void applyTheme(const QString& theme);
     void saveThemeConfig();
 
+    // 视频源配置（V0.6 统一源接口）：sys_param.ini 持久化 + 切换对话框
+    VideoSourceConfig loadSourceConfig() const;
+    void saveSourceConfig(const VideoSourceConfig& cfg);
+    void showSourceDialog();
+
     // UI组件
     QLabel* _videoLabel;
     QLabel* _logLabel;
@@ -60,6 +65,7 @@ private:
     QPushButton* _faceRecogBtn;
     QPushButton* _forbiddenZoneBtn;
     QPushButton* _registerFaceBtn;
+    QPushButton* _sourceBtn = nullptr;    // 视频源切换（V0.6：USB / RTSP）
     VideoCaptureThread* _captureThread;
     AnalysisThread* _analysisThread;
     QTimer* _renderTimer;
