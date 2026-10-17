@@ -2,7 +2,7 @@
 #include "EventHistoryDialog.h"
 #include "events/EventStore.h"
 #include "core/dataConfig.h"
-#include "WinTheme.h"
+#include "ui/theme/ThemeManager.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -136,9 +136,7 @@ void EventHistoryDialog::showDetail(int row)
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("事件详情"));
     dlg.resize(980, 720);
-#ifdef Q_OS_WIN
-    wintheme::applyDarkTitleBar(&dlg, true);   // 历史弹窗仅在深色主题内打开
-#endif
+    ThemeManager::instance().applyNative(&dlg);   // 原生标题栏按当前主题令牌配色
     auto* lay = new QVBoxLayout(&dlg);
 
     QLabel* meta = new QLabel(

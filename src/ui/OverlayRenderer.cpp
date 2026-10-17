@@ -1,7 +1,9 @@
-// src/app/OverlayRenderer.cpp
+// src/ui/OverlayRenderer.cpp
 // 画面叠加绘制（数据/呈现分离：引擎只给结构化结果，标注统一在这里）
-// 视觉语言：AI 检测风格的"四角括号"框 + 圆角标签 chip，与主窗口工业监控主题同源
+// 视觉语言：AI 检测风格的"四角括号"框 + 圆角标签 chip；颜色全部来自
+// uitheme::OverlayPalette（设计令牌，视频画面恒黑故与主题无关）
 #include "OverlayRenderer.h"
+#include "ui/theme/DesignTokens.h"
 
 QRect OverlayRenderer::toQRect(const cv::Rect& r)
 {
@@ -41,7 +43,7 @@ void OverlayRenderer::drawLabel(QPainter& p, const QRect& box,
         ty = box.top() + 4;                 // 顶部放不下 → 移到框内
     const QRect bg(box.left(), ty, tr.width() + 14, tr.height() + 6);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 165));
+    p.setBrush(uitheme::OverlayPalette::labelScrim);
     p.drawRoundedRect(bg, 4, 4);
     p.setBrush(Qt::NoBrush);
     // 左侧色点 + 文字：状态色语义一眼可辨
@@ -65,7 +67,7 @@ void OverlayRenderer::paint(QImage& img,
 
     // 禁区：红色虚线全框（边界语义需要完整闭合，保留矩形）
     if (!zone.empty()) {
-        const QColor zoneColor(0xef, 0x44, 0x44);
+        const QColor& zoneColor = uitheme::OverlayPalette::zone;
         p.setPen(QPen(zoneColor, 2, Qt::DashLine));
         p.setBrush(Qt::NoBrush);
         p.drawRect(toQRect(zone));
@@ -76,12 +78,12 @@ void OverlayRenderer::paint(QImage& img,
     for (const TrackedObjectResult& obj : objects) {
         QRect qr = toQRect(obj.rect);
         if (obj.confirmedLeft) {
-            const QColor amber(0xf5, 0x9e, 0x0b);
+            const QColor& amber = uitheme::OverlayPalette::leftObject;
             drawCornerBox(p, qr, amber, 3);
             const qint64 minutes = qMax<qint64>(1, obj.durationMs / 60000);
             drawLabel(p, qr, QStringLiteral("遗留物 %1分钟").arg(minutes), amber);
         } else {
-            drawCornerBox(p, qr, QColor(0x9c, 0xa3, 0xaf), 1);
+            drawCornerBox(p, qr, uitheme::OverlayPalette::trackBox, 1);
         }
     }
 
@@ -89,13 +91,13 @@ void OverlayRenderer::paint(QImage& img,
     for (const FaceResult& face : faces) {
         QRect qr = toQRect(face.rect);
         if (face.known) {
-            const QColor green(0x22, 0xc5, 0x5e);
+            const QColor& green = uitheme::OverlayPalette::knownFace;
             drawCornerBox(p, qr, green, 2);
             const QString label = face.name
                 + QStringLiteral(" %1%").arg(face.similarity, 0, 'f', 0);
             drawLabel(p, qr, label, green);
         } else {
-            const QColor yellow(0xea, 0xb3, 0x08);
+            const QColor& yellow = uitheme::OverlayPalette::unknownFace;
             drawCornerBox(p, qr, yellow, 2);
             // 附相似度便于阈值标定（R1：相似度口径统一为 %）
             const QString label = face.similarity >= 0
@@ -109,17 +111,17 @@ void OverlayRenderer::paint(QImage& img,
     if (intrusion.active) {
         p.setRenderHint(QPainter::Antialiasing, false);
         for (const cv::Rect& off : intrusion.offenders) {
-            p.setPen(QPen(QColor(0xdc, 0x26, 0x26), 4));
+            p.setPen(QPen(uitheme::OverlayPalette::intrusion, 4));
             p.drawRect(toQRect(off));
         }
         p.setRenderHint(QPainter::Antialiasing, true);
         const QRect band(0, 0, img.width(), 40);
-        p.fillRect(band, QColor(0xdc, 0x26, 0x26, 200));
+        p.fillRect(band, uitheme::OverlayPalette::banner);
         QFont f = p.font();
         f.setPointSize(16);
         f.setBold(true);
         p.setFont(f);
-        p.setPen(QColor(0xff, 0xff, 0xff));
+        p.setPen(uitheme::OverlayPalette::white);
         p.drawText(band, Qt::AlignCenter, QStringLiteral("入 侵 告 警"));
     }
 
@@ -141,11 +143,11 @@ void OverlayRenderer::paint(QImage& img,
         const QRect tr = fm.boundingRect(txt);
         const QRect bg(img.width() - tr.width() - 22, 10, tr.width() + 18, tr.height() + 10);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(0, 0, 0, 160));
+        p.setBrush(uitheme::OverlayPalette::labelScrim);
         p.drawRoundedRect(bg, 6, 6);
         p.setBrush(Qt::NoBrush);
         // 数值健康度配色：延迟可见即绿色（越界告警由事件系统承担）
-        p.setPen(QColor(0x34, 0xd3, 0x99));
+        p.setPen(uitheme::OverlayPalette::hudText);
         p.drawText(bg, Qt::AlignCenter, txt);
     }
 

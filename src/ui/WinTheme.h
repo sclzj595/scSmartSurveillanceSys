@@ -25,8 +25,9 @@
 
 namespace wintheme {
 
-// dark=true：深色标题栏（配色与 MainWindow 深色主题一致）；false：恢复浅色
-inline void applyDarkTitleBar(HWND hwnd, bool dark)
+// 深浅主题统一入口：显式传入配色（由 ThemeManager 从令牌换算，本文件不持色值）
+inline void applyDarkTitleBar(HWND hwnd, bool dark,
+                              COLORREF caption, COLORREF text, COLORREF border)
 {
     if (!hwnd)
         return;
@@ -35,13 +36,19 @@ inline void applyDarkTitleBar(HWND hwnd, bool dark)
     if (FAILED(DwmSetWindowAttribute(hwnd, 20, &v, sizeof v)))
         DwmSetWindowAttribute(hwnd, 19, &v, sizeof v);
 
-    // Win11 专属：标题栏/文字/边框精确配色（Win10 返回错误码，静默忽略）
+    // Win11 22000+：标题栏/文字/边框精确配色（Win10 返回错误码，静默忽略）
+    DwmSetWindowAttribute(hwnd, 35, &caption, sizeof caption);   // DWMWA_CAPTION_COLOR
+    DwmSetWindowAttribute(hwnd, 36, &text, sizeof text);         // DWMWA_TEXT_COLOR
+    DwmSetWindowAttribute(hwnd, 34, &border, sizeof border);     // DWMWA_BORDER_COLOR
+}
+
+// 缺省配色版（无 ThemeManager 场景；正常路径请走 ThemeManager::applyNative）
+inline void applyDarkTitleBar(HWND hwnd, bool dark)
+{
     const COLORREF cap = dark ? RGB(0x1b, 0x22, 0x2c) : RGB(0xff, 0xff, 0xff);
     const COLORREF txt = dark ? RGB(0xde, 0xe3, 0xec) : RGB(0x1f, 0x24, 0x30);
     const COLORREF brd = dark ? RGB(0x26, 0x2e, 0x3a) : RGB(0xe2, 0xe7, 0xee);
-    DwmSetWindowAttribute(hwnd, 35, &cap, sizeof cap);   // DWMWA_CAPTION_COLOR
-    DwmSetWindowAttribute(hwnd, 36, &txt, sizeof txt);   // DWMWA_TEXT_COLOR
-    DwmSetWindowAttribute(hwnd, 34, &brd, sizeof brd);   // DWMWA_BORDER_COLOR
+    applyDarkTitleBar(hwnd, dark, cap, txt, brd);
 }
 
 // QWidget 便捷重载（winId() 会强制创建原生窗口，构造后调用安全）
