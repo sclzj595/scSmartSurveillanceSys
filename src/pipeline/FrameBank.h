@@ -59,9 +59,18 @@ public:
         return _version;
     }
 
+    // 帧采集时刻（epoch ms）：store 时刻，供事件回溯到视频瞬间（阶段02 A-#2）
+    qint64 storedMs() const
+    {
+        QMutexLocker locker(&_mutex);
+        return _storedMs;
+    }
+
     // 阻塞等待版本号超过 seenVersion 的新帧（最多 timeoutMs），取出最新帧。
+    // storedMsOut 可空：命中时带回该帧的采集时刻（事件 ts 语义 = 帧采集时刻）。
     // 返回 false 表示超时无新帧（暂停/断流），调用方继续等待即可。
-    bool waitForNew(int seenVersion, int timeoutMs, cv::Mat& out, int& newVersion)
+    bool waitForNew(int seenVersion, int timeoutMs, cv::Mat& out, int& newVersion,
+                    qint64* storedMsOut = nullptr)
     {
         QMutexLocker locker(&_mutex);
         if (_version == seenVersion)
@@ -69,6 +78,7 @@ public:
         if (_version != seenVersion) {
             out = _frame;
             newVersion = _version;
+            if (storedMsOut) *storedMsOut = _storedMs;
             return true;
         }
         return false;

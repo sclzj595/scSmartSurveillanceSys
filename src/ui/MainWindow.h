@@ -110,9 +110,12 @@ private:
     EventThrottle _eventThrottle;         // R2 冷却
     bool _lastLeftAny = false;            // 遗留物沿检测：上帧是否存在确认遗留目标
     QVector<SecurityEvent> _pendingEvents; // 待搭车截图的事件（_resultMutex 保护）
+    qint64 _lastEvtTsMs = -1;             // 事件 ID 游标（A5：同毫秒 seq 单调，仅 GUI 线程触碰）
+    int _lastEvtSeq = 0;
     QPushButton* _historyBtn = nullptr;
 
     void detectEvents(const AnalysisResult& result);   // 事件判定（业务层规则）
+    void stampEventIdentity(SecurityEvent& e);         // A5 ID 赋值单点：ts=采集时刻 + 同毫秒单调 seq（仅 GUI 线程）
 
     // ---- 独立服务层 MediaLink（PRD 第 9 章：HTTP 数据服务 + WebRTC 推流）----
     void initMediaLink();                              // 构造尾部调用：HTTP + providers

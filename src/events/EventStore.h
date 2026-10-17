@@ -22,14 +22,17 @@
 #include <QMutex>
 #include <QString>
 #include <QVector>
+#include <atomic>
 
 // ===== 事件数据模型 =====
 struct SecurityEvent {
     enum Type { FaceKnown, FaceUnknown, LeftObject, LeftCleared, Intrusion };
 
     Type type = FaceKnown;
-    qint64 tsMs = 0;          // epoch ms（落盘时刻，判定与截图差 <100ms）
+    qint64 tsMs = 0;          // epoch ms：事件发生时刻 = 帧采集时刻（阶段02 语义修正，
+                              // 创建时赋值；0 仅在无帧上下文的旧数据回读中出现）
     int seq = 0;              // 同毫秒序号（A5 去碰撞：id = e<tsMs>-<seq>，进程内单调）
+    qint64 captureTsMs = 0;   // 帧采集时刻（阶段02 透传）：>0 时与 tsMs 相同，落盘留痕可区分语义
     QString subject;          // 对象：人名 / "陌生人" / "禁区" / "画面目标"
     double similarity = -1.0; // R1 口径 0~100；-1 = 不适用
     QString detail;           // 中文描述
@@ -89,6 +92,11 @@ private:
     class EventWorker;      // 定义见 cpp（moveToThread 的无 parent worker）
     EventWorker* _worker = nullptr;
     QThread* _thread = nullptr;
+
+    // 持久化恢复能力（阶段02）：入队有界，磁盘慢/失效时不无限积压内存
+    static constexpr int kMaxPendingPosts = 256;  // 在途落盘任务上限
+    std::atomic<int> _pendingPosts{0};            // 在途任务计数（GUI 加 / worker 减）
+    qint64 _droppedTotal = 0;                     // 队列满被丢弃的事件累计（GUI 线程专用）
 };
 
 #endif // EVENTSTORE_H

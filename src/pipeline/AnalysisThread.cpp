@@ -68,7 +68,8 @@ void AnalysisThread::run()
     while (_running) {
         cv::Mat frame;
         int newVersion = seenVersion;
-        if (!_bank->waitForNew(seenVersion, 100, frame, newVersion))
+        qint64 storedMs = 0;
+        if (!_bank->waitForNew(seenVersion, 100, frame, newVersion, &storedMs))
             continue;                       // 超时无新帧（暂停/断流），继续等待
         // 帧覆盖率统计：两窗之间被覆盖式单槽跳过的帧数（FR-01 丢帧保时延的可见化）
         if (newVersion > seenVersion + 1)
@@ -76,6 +77,11 @@ void AnalysisThread::run()
         seenVersion = newVersion;
         if (frame.empty())
             continue;
+
+        // 帧身份先行记录（阶段02）：即使本帧分析异常跳过，时间戳语义也已与采集对齐
+        AnalysisResult result;
+        result.captureTsMs = storedMs;
+        result.frameVersion = newVersion;
 
         // 节流：识别频率上限 25Hz（预览渲染不受此限制）
         qint64 nowMs = clock.elapsed();
@@ -97,7 +103,6 @@ void AnalysisThread::run()
             work = frame;                   // 浅拷贝共享引用计数，零 memcpy
 
         // 异常隔离：单帧算法异常（如 CV 断言）只跳过该帧，绝不杀死整个进程
-        AnalysisResult result;
         try {
             if (_face) {
                 _face->analyze(work, result.faces);

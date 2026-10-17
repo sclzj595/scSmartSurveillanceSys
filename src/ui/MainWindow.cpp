@@ -156,6 +156,22 @@ void MainWindow::renderTick()
     }
 }
 
+// 事件身份赋值单点（阶段02 / A5）：
+//   ts = 帧采集时刻（result.captureTsMs 透传，事件↔画面精确回溯；无帧上下文退化为当前时刻）
+//   seq = 同毫秒单调自增（仅 GUI 线程判定事件，天然无竞争；HTTP/WS/JSONL 三处同源）
+// 边界：冷却/节流仍用挂钟 now，事件 ts 语义变化不影响冷却窗口
+void MainWindow::stampEventIdentity(SecurityEvent& e)
+{
+    e.tsMs = e.captureTsMs > 0 ? e.captureTsMs : QDateTime::currentMSecsSinceEpoch();
+    if (e.tsMs == _lastEvtTsMs) {
+        e.seq = ++_lastEvtSeq;
+    } else {
+        _lastEvtTsMs = e.tsMs;
+        _lastEvtSeq = 0;
+        e.seq = 0;
+    }
+}
+
 // 事件判定（业务层规则，PRD 8.1；引擎只给结构化结果，"什么算事件"在这里）
 void MainWindow::detectEvents(const AnalysisResult& result)
 {
@@ -168,9 +184,11 @@ void MainWindow::detectEvents(const AnalysisResult& result)
             if (_eventThrottle.allow(QStringLiteral("face_known:%1").arg(f.name), now, 30 * 1000)) {
                 SecurityEvent e;
                 e.type = SecurityEvent::FaceKnown;
+                e.captureTsMs = result.captureTsMs;
                 e.subject = f.name;
                 e.similarity = f.similarity;
                 e.detail = QStringLiteral("识别到已登记人员（相似度 %1%）").arg(f.similarity, 0, 'f', 0);
+                stampEventIdentity(e);
                 events.append(e);
             }
         } else if (f.similarity >= 0) {
@@ -178,9 +196,11 @@ void MainWindow::detectEvents(const AnalysisResult& result)
             if (_eventThrottle.allow(QStringLiteral("face_unknown"), now, 30 * 1000)) {
                 SecurityEvent e;
                 e.type = SecurityEvent::FaceUnknown;
+                e.captureTsMs = result.captureTsMs;
                 e.subject = QStringLiteral("陌生人");
                 e.similarity = f.similarity;
                 e.detail = QStringLiteral("出现未登记人脸（与档案最高相似度 %1%）").arg(f.similarity, 0, 'f', 0);
+                stampEventIdentity(e);
                 events.append(e);
             }
         }
@@ -191,8 +211,10 @@ void MainWindow::detectEvents(const AnalysisResult& result)
         if (_eventThrottle.allow(QStringLiteral("intrusion:zone"), now, 10 * 1000)) {
             SecurityEvent e;
             e.type = SecurityEvent::Intrusion;
+            e.captureTsMs = result.captureTsMs;
             e.subject = QStringLiteral("禁区");
             e.detail = QStringLiteral("有目标进入禁区（目标数 %1）").arg(result.intrusion.offenders.size());
+            stampEventIdentity(e);
             events.append(e);
         }
     }
@@ -203,10 +225,12 @@ void MainWindow::detectEvents(const AnalysisResult& result)
         if (_eventThrottle.allow(QStringLiteral("left_object"), now, 60 * 1000)) {
             SecurityEvent e;
             e.type = leftAny ? SecurityEvent::LeftObject : SecurityEvent::LeftCleared;
+            e.captureTsMs = result.captureTsMs;
             e.subject = QStringLiteral("画面目标");
             e.detail = leftAny
                 ? QStringLiteral("目标静止超过阈值，确认遗留")
                 : QStringLiteral("遗留物已移走");
+            stampEventIdentity(e);
             events.append(e);
         }
         _lastLeftAny = leftAny;
