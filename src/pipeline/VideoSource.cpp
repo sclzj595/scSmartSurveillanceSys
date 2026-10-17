@@ -87,13 +87,13 @@ public:
         // 画质管线（降噪+调色）整体兜底：任何 OpenCV 异常退化为直通原始帧，
         // 采集线程绝不因图像处理挂掉（闪退教训：threshold 不支持多通道）
         try {
-            // 降噪在调色之前：先消时域噪声，后续提亮曲线才不会把噪声一起放大
-            if (_cfg.noiseReduction) {
+            // 降噪（默认关）：开启时在调色之前，先消时域噪声再提亮
+            if (_cfg.noiseReduction)
                 applyTemporalNr(out);
-                smoothChroma(out);
-            }
-            if (_cfg.enhance)
+            if (_cfg.enhance) {
+                smoothChroma(out);   // MJPG 色斑清理：便宜且无鬼影，随增强常开
                 applyEnhance(out);
+            }
         } catch (const cv::Exception& e) {
             qWarning() << "[VideoSource] image pipeline error, raw passthrough:"
                        << e.what();
