@@ -15,12 +15,13 @@ file(GLOB SRCS
 add_executable(SmartSurveillance ${SRCS})
 
 # 链接库
-target_link_libraries(SmartSurveillance 
-    Qt5::Core 
-    Qt5::Gui 
-    Qt5::Widgets 
-    Qt5::Concurrent 
+target_link_libraries(SmartSurveillance
+    Qt5::Core
+    Qt5::Gui
+    Qt5::Widgets
+    Qt5::Concurrent
     ${OpenCV_LIBS}
+    FaceAlgorithm      # 可插拔人脸算法库 DLL（同一构建树，产物自动落 build/bin）
 )
 
 # 设置目标属性 - 确保在build/bin下

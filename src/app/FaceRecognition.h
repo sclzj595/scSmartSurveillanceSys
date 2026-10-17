@@ -1,4 +1,10 @@
-// FaceRecognition.h (文档9)
+// FaceRecognition.h
+// 业务适配器：将 falgo::FaceAlgorithm 独立算法库（FaceAlgorithm.dll）接入监控业务
+//
+// 组件化边界（PRD v2.1 第 4 章）：
+//   - 算法本体（检测/识别/预处理/抓拍/模型存取）在 ../FaceAlgorithm 独立 DLL，
+//     与闸机项目共用同一份算法，改 LBPH/换检测模型两边同步生效
+//   - 本类只做业务翻译：label→姓名映射、建议名编号、开关控制、互斥编排
 #ifndef FACERECOGNITION_H
 #define FACERECOGNITION_H
 
@@ -9,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <map>
+#include <facealgorithm/FaceAlgorithm.h>
 #include "dataConfig.h"
 #include "AnalysisTypes.h"
 
@@ -31,11 +38,10 @@ public:
     void analyze(const cv::Mat& frame, std::vector<FaceResult>& out);
 
     // 两段式注册 · 第一步：检测并提取最大人脸（不入库）
-    // 可在任意线程调用（内部持 _mutex，与 analyze 串行化——
-    // 同一 CascadeClassifier 并发 detectMultiScale 非线程安全）
+    // 可在任意线程调用（内部持 _mutex，与 analyze 串行化）
     struct RegisterDetection {
         RegisterStatus status = RegisterStatus::NoFace;
-        cv::Mat face;          // Ok 时有效：人脸灰度 ROI
+        cv::Mat face;          // Ok 时有效：归一化灰度人脸 100x100
         QString suggestedName; // 弹窗建议名（"用户N"，自动跳过已占用）
     };
     RegisterDetection detectFaceForRegister(const cv::Mat& bgrFrame);
@@ -50,34 +56,13 @@ signals:
     void faceRecognized(QString name, double similarity);
 
 private:
-    class LBPHRecognizer {
-    public:
-        LBPHRecognizer();
-        cv::Mat computeLBP(const cv::Mat& src) const;
-        // 网格直方图描述子：LBP 图 4x4 网格 × 每格 256 维归一化直方图 → 1x4096 CV_32F
-        // 距离值域 0~sqrt(16*2)≈5.66，同一个人通常 <1.5，不同人 >2.5
-        cv::Mat describe(const cv::Mat& gray100) const;
-        void train(const std::vector<cv::Mat>& images, const std::vector<int>& labels);
-        void predict(const cv::Mat& src, int& label, double& confidence) const;
-    private:
-        std::map<int, std::vector<cv::Mat>> _model;   // 存储 describe() 描述子（非原始图）
-    };
-
-    // 以下方法都必须在持有 _mutex 时调用
-    void detectFaces(cv::Mat &gray, std::vector<cv::Rect> &faces);
-    void registerFaceLocked(const cv::Mat& grayFace, const QString& name);
+    // 前置条件：_mutex 已持有
     QString suggestedNameLocked() const;
 
-    cv::CascadeClassifier _faceCascade;
-    LBPHRecognizer _recognizer;
-    std::map<int, QString> _labelMap;
-    int _nextLabel = 0;
-    cv::Size _faceSize = cv::Size(100, 100);
-    bool _enabled = false;   // 与界面默认"人脸识别: 关闭"一致
-    QMutex _mutex;           // 保护分类器/人脸库（分析线程 vs 注册任务）
-
-    std::vector<cv::Mat> _allSamples;
-    std::vector<int> _allLabels;
+    falgo::FaceAlgorithm _algo;          // 可插拔算法库实例（内部自互斥）
+    std::map<int, QString> _labelMap;    // 业务侧：label → 姓名（算法库不知姓名概念）
+    bool _enabled = false;               // 与界面默认"人脸识别: 关闭"一致
+    QMutex _mutex;                       // 保护 labelMap 与算法调用的业务一致性
 };
 
 #endif // FACERECOGNITION_H

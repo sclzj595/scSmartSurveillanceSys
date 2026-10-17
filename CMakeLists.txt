@@ -37,6 +37,10 @@ find_package(Qt5 COMPONENTS Core Gui Widgets Concurrent REQUIRED)
 find_package(OpenCV REQUIRED
   COMPONENTS core imgproc video videoio objdetect)
 
+# 可插拔人脸算法库（独立 DLL，业务无关；与人脸闸机项目共用同一份算法源码）
+set(FACEALGORITHM_DIR "${CMAKE_SOURCE_DIR}/../FaceAlgorithm" CACHE PATH "FaceAlgorithm 源码目录")
+add_subdirectory(${FACEALGORITHM_DIR} ${CMAKE_BINARY_DIR}/FaceAlgorithm)
+
 # 添加子目录
 add_subdirectory(src)
 
