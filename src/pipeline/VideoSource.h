@@ -42,13 +42,16 @@ struct VideoSourceConfig
     // 逆光场景 AE 拉长曝光 → 帧率被压到 ~9fps。autoExposure=false 时锁死快门
     bool autoExposure = true;        // true=自动曝光+打开后暖机冲刷（等收敛再出画）
     double exposure = -6.0;          // 手动曝光（DSHOW log2 秒：-6≈1/64s，可保 30fps）
-    // 画质增强（阶段02 实测项）：对齐系统相机观感 = lift-gamma-gain 调色曲线
-    // （黑位抬起不死黑 + 中间调提亮）+ 轻度 CLAHE + 饱和补偿
-    bool enhance = true;             // USB 源读帧后逐帧增强（全管线约 6ms@640x480）
-    double gammaTarget = 135;        // 自适应 gamma 目标均值 0-255：0=关闭；只提亮不压暗
-    double blackLift = 14;           // 黑位抬升 0-64：暗部不再压成死黑，背景细节显现（系统相机感的核心）
-    double clipLimit = 1.2;          // CLAHE 强度（轻度）：>1 生效，防噪声爆炸
-    double saturation = 1.10;        // 饱和补偿倍数：提亮后色彩回鲜；1.0=不动
+    // 画质增强（阶段02 实测结论：净负收益，默认关闭）——
+    // git 历史回溯定论：3971759（裸帧+AE暖机）是本机最优状态：实时30fps、
+    // 零延迟、开机不过曝。此后叠加的 CLAHE（泛灰）/gamma（MOG2整帧误检）/
+    // 时域降噪（鬼影+30→14fps）均以实时性为代价。代码保留供 RTSP 静态
+    // 场景选用；USB 实时预览保持裸帧直通
+    bool enhance = false;
+    double gammaTarget = 135;        // 自适应 gamma 目标均值 0-255：0=关闭
+    double blackLift = 14;           // 黑位抬升 0-64
+    double clipLimit = 1.2;          // CLAHE 强度
+    double saturation = 1.10;        // 饱和补偿倍数
     // 时域降噪（模拟系统相机驱动 3D NR）：实测代价过高默认关闭——
     // 浮点掩膜全套 ~20ms 拖垮采集帧率（30→14），运动区掩膜不全导致"融化"鬼影。
     // 实时性优先（用户明确要求）：保留代码备查，弱噪声场景可手动开启

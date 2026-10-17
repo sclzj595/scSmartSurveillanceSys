@@ -558,8 +558,8 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
     // Camera/autoExposure=0 + Camera/exposure=-6（log2 秒，-6≈1/64s 保 30fps）
     cfg.autoExposure = _settings->value("Camera/autoExposure", true).toBool();
     cfg.exposure     = _settings->value("Camera/exposure", -6.0).toDouble();
-    // 画质增强（阶段02 实测项）：对齐系统相机观感，Camera/enhance=0 一键关闭
-    cfg.enhance     = _settings->value("Camera/enhance", true).toBool();
+    // 画质增强（阶段02 实测定论：默认关闭，裸帧+AE暖机即最优——见 VideoSource.h 注释）
+    cfg.enhance     = _settings->value("Camera/enhance", false).toBool();
     cfg.gammaTarget = _settings->value("Camera/gammaTarget", 135).toDouble();
     cfg.blackLift   = _settings->value("Camera/blackLift", 14).toDouble();
     cfg.clipLimit   = _settings->value("Camera/clipLimit", 1.2).toDouble();
