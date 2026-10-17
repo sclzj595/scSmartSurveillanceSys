@@ -14,7 +14,22 @@ public:
     bool open() override
     {
         close();
-        return _cap.open(_cfg.usbIndex, cv::CAP_DSHOW);
+        if (!_cap.open(_cfg.usbIndex, cv::CAP_DSHOW))
+            return false;
+        // DSHOW 缺省协商在部分驱动状态下会落到"黑帧 + ~1fps"坏模式
+        // （实测：同一摄像头 ffmpeg 直取 15fps 正常，OpenCV 缺省协商却 1fps 黑帧）。
+        // 显式重协商 MJPG + 分辨率/帧率 + 单帧缓冲绕开坏路径；
+        // 相机不支持某项时 set 返回 false 自动维持缺省，无副作用。
+        _cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        _cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
+        _cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
+        _cap.set(cv::CAP_PROP_FPS, 30);
+        _cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        qInfo() << "USB source opened:"
+                << "fps=" << _cap.get(cv::CAP_PROP_FPS)
+                << "fourcc=" << QString::number(
+                       static_cast<int>(_cap.get(cv::CAP_PROP_FOURCC)), 16);
+        return true;
     }
     bool read(cv::Mat& out) override { _cap >> out; return !out.empty(); }
     void close() override
