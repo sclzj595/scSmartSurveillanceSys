@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QVector>
 #include <QRubberBand>
+#include <medialink/MediaLink.h>
 
 // 线程模型（FR-01 异步识别管线）：
 //   [采集线程] --store--> [FrameBank] --waitForNew--> [分析线程]（HAAR/MOG2/LBPH/禁区）
@@ -96,6 +97,12 @@ private:
     QPushButton* _historyBtn = nullptr;
 
     void detectEvents(const AnalysisResult& result);   // 事件判定（业务层规则）
+
+    // ---- 独立服务层 MediaLink（PRD 第 9 章：HTTP 数据服务 + WebRTC 推流）----
+    void initMediaLink();                              // 构造尾部调用：HTTP + providers
+    mlink::MediaLink* _mediaLink = nullptr;
+    QPushButton* _streamBtn = nullptr;                 // WebRTC 推流开关（默认关）
+    bool _streamOn = false;
 
     // 渲染帧率统计
     QElapsedTimer _renderClock;

@@ -55,6 +55,10 @@ public:
 signals:
     void faceRecognized(QString name, double similarity);
 
+public:
+    // ---- MediaLink 服务层数据源（HTTP API 用）----
+    QByteArray personsJsonBytes() const;   // [{label,name,samples}]，内部持锁
+
 private:
     // 前置条件：_mutex 已持有
     QString suggestedNameLocked() const;
@@ -66,7 +70,7 @@ private:
     falgo::FaceAlgorithm _algo;          // 可插拔算法库实例（内部自互斥）
     std::map<int, QString> _labelMap;    // 业务侧：label → 姓名（算法库不知姓名概念）
     bool _enabled = false;               // 与界面默认"人脸识别: 关闭"一致
-    QMutex _mutex;                       // 保护 labelMap 与算法调用的业务一致性
+    mutable QMutex _mutex;                       // 保护 labelMap 与算法调用的业务一致性
 };
 
 #endif // FACERECOGNITION_H

@@ -41,6 +41,9 @@ find_package(OpenCV REQUIRED
 set(FACEALGORITHM_DIR "${CMAKE_SOURCE_DIR}/../FaceAlgorithm" CACHE PATH "FaceAlgorithm 源码目录")
 add_subdirectory(${FACEALGORITHM_DIR} ${CMAKE_BINARY_DIR}/FaceAlgorithm)
 
+# 独立服务层（PRD 第 9 章）：HTTP 数据服务 + WebRTC 推流（纯 STL，无 Qt/OpenCV 依赖）
+add_subdirectory(${CMAKE_SOURCE_DIR}/../MediaLink ${CMAKE_BINARY_DIR}/MediaLink)
+
 # 添加子目录
 add_subdirectory(src)
 

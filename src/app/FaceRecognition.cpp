@@ -113,6 +113,22 @@ bool FaceRecognition::commitRegister(const cv::Mat& grayFace, const QString& nam
     return true;
 }
 
+// ---- MediaLink 服务层数据源 ----
+// 序列化在锁内完成（QJson 构建快，httplib 线程直接拿 bytes，不共享 Qt 对象）
+QByteArray FaceRecognition::personsJsonBytes() const
+{
+    QMutexLocker locker(&_mutex);
+    QJsonArray arr;
+    for (const auto& pair : _labelMap) {
+        QJsonObject o;
+        o.insert("label", pair.first);
+        o.insert("name", pair.second);
+        o.insert("samples", _algo.sampleCount(pair.first));
+        arr.append(o);
+    }
+    return QJsonDocument(arr).toJson(QJsonDocument::Compact);
+}
+
 // ---- 档案持久化（D6 / V0.5）----
 // 模型 YAML：labels 与 descs 两条平行序列（FaceAlgorithm 内部存取）
 // 标签映射：JSON 数组 [{label, name}]，与 YAML 的 label 空间一一对应

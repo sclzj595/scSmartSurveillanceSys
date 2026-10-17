@@ -19,6 +19,7 @@
 #include <QThread>
 #include <QImage>
 #include <QHash>
+#include <QMutex>
 #include <QString>
 #include <QVector>
 
@@ -71,10 +72,19 @@ public:
     // 退出前调用：停 worker 线程（未落盘的尾差可接受，进程即将退出）
     void shutdown();
 
+    // ---- MediaLink 服务层数据源（HTTP API 用）----
+    // 内存缓存快照 → QJsonDocument 数组 bytes（最新在前，字段与落盘 jsonl 一致）
+    QByteArray recentJsonBytes(int limit, const QString& typeKey) const;
+    // 事件存证图绝对路径（rel = jsonl 里的 image 字段）；无文件返回空串
+    QString resolveImagePath(const QString& rel) const;
+
 signals:
     void storeError(const QString& msg);   // R4：写失败仅提示，不中断识别
 
 private:
+    void preloadTodayLocked();   // 构造：回读当天 jsonl 填充 _recent（重启可查）
+    mutable QMutex _recentMutex;           // 保护 _recent（GUI 写 / httplib 线程读）
+    QVector<SecurityEvent> _recent;        // 内存缓存（cap 500）
     class EventWorker;      // 定义见 cpp（moveToThread 的无 parent worker）
     EventWorker* _worker = nullptr;
     QThread* _thread = nullptr;

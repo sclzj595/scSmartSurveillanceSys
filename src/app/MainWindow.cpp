@@ -59,6 +59,8 @@ MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 
     _renderClock.start();
     _captureThread->startCapture(0);
+
+    initMediaLink();   // 独立服务层（PRD 第 9 章）：HTTP 数据服务随启动开启
 }
 
 void MainWindow::renderTick()
@@ -67,6 +69,11 @@ void MainWindow::renderTick()
     if (frame.empty())
         return;                 // 无新帧（暂停/断流）→ 保持上一画面
     _lastFrame = frame;         // 引用计数拷贝（只读，注册人脸用）
+
+    // 服务层推流（PRD 第 9 章）：渲染帧搭车喂给 MediaLink 内部最新帧槽（非阻塞）
+    if (_streamOn && _mediaLink && !_lastFrame.empty())
+        _mediaLink->pushFrame(_lastFrame.data, _lastFrame.cols, _lastFrame.rows,
+                              int(_lastFrame.step));
     const qint64 frameAgeMs = _frameBank->ageMs();  // 帧龄须在 load 后立刻取，晚了不准
 
     // 实际预览渲染帧率统计（FR-08 诊断角标）
@@ -179,6 +186,11 @@ void MainWindow::onAnalysisReady(const AnalysisResult& result)
 
 MainWindow::~MainWindow()
 {
+    // 服务层先停（内部 join HTTP/推流线程，避免窗口析构后 Queued 日志悬空）
+    if (_mediaLink) {
+        delete _mediaLink;          // 析构内 stopStream + stopHttp
+        _mediaLink = nullptr;
+    }
     // 主题保存 然后关闭config
     saveThemeConfig();
     if (_settings)   delete _settings;
@@ -341,11 +353,68 @@ void MainWindow::initUI()
     });
     btnLayout->addWidget(_historyBtn);
 
+    // WebRTC 推流开关（独立服务层 MediaLink：FFmpeg 管道 → MediaMTX → H5 拉流）
+    _streamBtn = new QPushButton(QStringLiteral("WebRTC推流: 关"), this);
+    connect(_streamBtn, &QPushButton::clicked, this, [this]() {
+        if (_streamOn) {
+            _mediaLink->stopStream();
+            _streamOn = false;
+            _streamBtn->setText(QStringLiteral("WebRTC推流: 关"));
+            _logLabel->setText(QStringLiteral("推流已停止"));
+        } else {
+            const mlink::StreamConfig cfg;   // 默认 tools/ffmpeg.exe → rtsp://127.0.0.1:8554/sccam
+            _mediaLink->setStreamConfig(cfg);
+            if (!_mediaLink->startStream())
+                _logLabel->setText(QStringLiteral(
+                    "推流未启动（Degraded）：未找到 tools/ffmpeg.exe；放入后重开开关即生效"));
+            else
+                _logLabel->setText(QStringLiteral("推流启动中，等待首帧…目标 %1").arg(QString::fromStdString(cfg.targetUrl)));
+            _streamOn = true;
+            _streamBtn->setText(QStringLiteral("WebRTC推流: 开"));
+        }
+    });
+    btnLayout->addWidget(_streamBtn);
+
     // 主布局里面加按钮布局
     mainLayout->addLayout(btnLayout);
 
     setWindowTitle("智能安防监控系统");
     resize(1200, 800);
+}
+
+void MainWindow::initMediaLink()
+{
+    // 服务层为纯 STL 对象（非 Qt 树），析构在 ~MainWindow 手动 delete
+    _mediaLink = new mlink::MediaLink;
+    _mediaLink->setLogger([this](const std::string& m) {
+        // httplib/推流线程回调：必须切回 GUI 线程才能碰 UI
+        const QString msg = QString::fromUtf8(m.c_str());
+        QMetaObject::invokeMethod(this, [this, msg] { _logLabel->setText(msg); },
+                                  Qt::QueuedConnection);
+    });
+
+    // 数据注入：业务在宿主（EventStore/FaceRecognition），服务层不持有业务状态
+    mlink::Provider p;
+    p.events = [this](int limit, const std::string& type) {
+        const QByteArray bytes =
+            _eventStore->recentJsonBytes(limit, QString::fromStdString(type));
+        auto j = nlohmann::json::parse(bytes.constBegin(), bytes.constEnd(),
+                                       nullptr, /*allow_exceptions=*/false);
+        return j.is_discarded() ? nlohmann::json::array() : j;
+    };
+    p.persons = [this]() {
+        const QByteArray bytes = _faceRecognizer->personsJsonBytes();
+        auto j = nlohmann::json::parse(bytes.constBegin(), bytes.constEnd(),
+                                       nullptr, /*allow_exceptions=*/false);
+        return j.is_discarded() ? nlohmann::json::array() : j;
+    };
+    _mediaLink->setProviders(p);
+
+    if (_mediaLink->startHttp(8080))
+        _logLabel->setText(QStringLiteral(
+            "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）"));
+    else
+        _logLabel->setText(QStringLiteral("HTTP :8080 端口被占用，数据服务未开启"));
 }
 
 void MainWindow::applyTheme(const QString &theme)

@@ -22,6 +22,7 @@ target_link_libraries(SmartSurveillance
     Qt5::Concurrent
     ${OpenCV_LIBS}
     FaceAlgorithm      # 可插拔人脸算法库 DLL（同一构建树，产物自动落 build/bin）
+    medialink          # 独立服务层：HTTP 数据服务 + WebRTC 推流（PRD 第 9 章）
 )
 
 # 设置目标属性 - 确保在build/bin下
