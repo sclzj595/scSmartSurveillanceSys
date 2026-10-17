@@ -36,3 +36,4 @@ events/
 sys_param.ini
 face_model.yml
 face_labels.json
+.trae-html-share-packages/
