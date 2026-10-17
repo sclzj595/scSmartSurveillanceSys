@@ -465,6 +465,7 @@ AnalysisResult {
     <tr><td>2026-10-17</td><td class="num"><code>84ef198</code></td><td><strong>feat(V0.4)</strong>：事件持久化——EventStore 异步落盘（R2 冷却/R4 失败不阻塞）+ 截图存证搭车渲染节拍 + 历史查询对话框（8.3）</td></tr>
     <tr><td>2026-10-17</td><td class="num"><code>c49b21f</code></td><td><strong>chore</strong>：课程版 Python 源码目录更名 <code>pyCore--standard</code></td></tr>
     <tr><td>2026-10-17</td><td class="num"><code>4198365</code></td><td><strong>feat(架构)</strong>：算法库组件化——人脸识别抽为独立 <code>FaceAlgorithm.dll</code>（f:/CODE/Qt_forNoVS/FaceAlgorithm 独立仓库，业务无关、不依赖 Qt），监控与人脸闸机双项目共用；本仓库 FaceRecognition 降为业务适配器（净删 316 行）。证据：DLL 独立构建 + smoke 回环测试 PASS（注册后自识别 sim=100）；主程序链接运行正常。升级预案（方案2 动态插件）见 12 章开放问题 Q10</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>cfd5d23</code></td><td><strong>feat(V0.5)</strong>：<strong>D6</strong> 档案持久化（注册即落盘 face_model.yml + face_labels.json，重启自动恢复，复用 FaceAlgorithm 存取接口）；<strong>D5</strong> 禁区坐标映射修复（MainWindow→label 局部→反缩放→源帧坐标；新增 QRubberBand 绘制预览）</td></tr>
   </tbody>
 </table>
 
