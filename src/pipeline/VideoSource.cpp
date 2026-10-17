@@ -45,7 +45,7 @@ public:
             _clahe = cv::createCLAHE(_cfg.clipLimit, cv::Size(8, 8));
         // 时域降噪基准复位（重开流 = 场景可能已变，重新收敛）
         _nrAcc.release();
-        _nrPrev.release();
+        _nrPrevGray.release();
         // 饱和补偿 LUT：HSV 的 S 通道整体乘系数（提亮后色彩回鲜），开器时建一次
         _satLut.release();
         if (_cfg.enhance && _cfg.saturation > 1.001) {
@@ -69,14 +69,37 @@ public:
         _cap >> out;
         if (out.empty())
             return false;
-        // 降噪在调色之前：先消时域噪声，后续提亮曲线才不会把噪声一起放大
-        if (_cfg.noiseReduction) {
-            applyTemporalNr(out);
-            smoothChroma(out);
+        // 画质管线（降噪+调色）整体兜底：任何 OpenCV 异常退化为直通原始帧，
+        // 采集线程绝不因图像处理挂掉（闪退教训：threshold 不支持多通道）
+        try {
+            // 降噪在调色之前：先消时域噪声，后续提亮曲线才不会把噪声一起放大
+            if (_cfg.noiseReduction) {
+                applyTemporalNr(out);
+                smoothChroma(out);
+            }
+            if (_cfg.enhance)
+                applyEnhance(out);
+        } catch (const cv::Exception& e) {
+            qWarning() << "[VideoSource] image pipeline error, raw passthrough:"
+                       << e.what();
         }
-        if (!_cfg.enhance)
-            return true;
-        // 三段增强管线（顺序有讲究：先整体提亮再局部均衡，最后色彩回鲜）：
+        return true;
+    }
+    void close() override
+    {
+        if (_cap.isOpened())
+            _cap.release();
+    }
+    bool isOpened() const override { return _cap.isOpened(); }
+    QString describe() const override
+    {
+        return QStringLiteral("USB 摄像头 %1").arg(_cfg.usbIndex);
+    }
+
+private:
+    // ---- 三段增强管线（顺序有讲究：先整体提亮再局部均衡，最后色彩回鲜）----
+    void applyEnhance(cv::Mat& out)
+    {
         // 1) lift-gamma-gain 调色曲线（系统相机观感的核心）：
         //    lut[i] = lift + (255-lift) * (i/255)^gamma
         //    —— 黑位抬起（暗部成深灰不死黑，背景细节显现）+ gamma 拉中间调；
@@ -120,20 +143,8 @@ public:
             cv::merge(ch, hsv);
             cv::cvtColor(hsv, out, cv::COLOR_HSV2BGR);
         }
-        return true;
-    }
-    void close() override
-    {
-        if (_cap.isOpened())
-            _cap.release();
-    }
-    bool isOpened() const override { return _cap.isOpened(); }
-    QString describe() const override
-    {
-        return QStringLiteral("USB 摄像头 %1").arg(_cfg.usbIndex);
     }
 
-private:
     // ---- 时域降噪（对齐系统相机驱动里的 3D NR）----
     // 原理：暗场噪声是逐帧随机的，多帧指数滑动平均可将其约 √N 倍地压掉；
     // 运动掩膜保护移动目标（变化超阈值的像素走直通），静止区重度平均。
@@ -142,26 +153,32 @@ private:
     {
         cv::Mat f32;
         frame.convertTo(f32, CV_32F);
+        cv::Mat gray;
+        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
         if (_nrAcc.empty()) {           // 首帧：建立基准
             f32.copyTo(_nrAcc);
-            frame.copyTo(_nrPrev);
+            _nrPrevGray = gray.clone();
             return;
         }
-        // 运动掩膜：与上一帧输出比，变化大的像素直通（alpha=1）防拖影；
-        // boxFilter 羽化掩膜边缘，避免"静/动交界闪烁"
-        cv::Mat diff, motion, a8;
-        cv::absdiff(frame, _nrPrev, diff);
+        // 运动掩膜（必须全程单通道：threshold 不支持多通道）：
+        // 灰度差 > 28 判为运动 → 直通（alpha=1）防拖影；5x5 羽化防交界闪烁
+        cv::Mat diff, motion;
+        cv::absdiff(gray, _nrPrevGray, diff);
         cv::threshold(diff, motion, 28.0, 255.0, cv::THRESH_BINARY);
         cv::boxFilter(motion, motion, -1, cv::Size(5, 5));
         cv::threshold(motion, motion, 20.0, 255.0, cv::THRESH_BINARY);
-        motion.convertTo(a8, CV_32F, 1.0 / 255.0);
-        cv::Mat alpha(motion.size(), CV_32F, qBound(0.05, _cfg.nrAlpha, 0.5));
-        cv::max(alpha, a8, alpha);      // 逐像素：静止→nrAlpha，运动→1.0
+        cv::Mat alpha;
+        motion.convertTo(alpha, CV_32F, 1.0 / 255.0);
+        const cv::Mat base(motion.size(), CV_32F,
+                           cv::Scalar(qBound(0.05, _cfg.nrAlpha, 0.5)));
+        cv::max(base, alpha, alpha);    // 逐像素：静止→nrAlpha，运动→1.0
+        cv::Mat alpha3;
+        cv::cvtColor(alpha, alpha3, cv::COLOR_GRAY2BGR);   // 广播到 3 通道
         cv::Mat delta;
-        cv::multiply(alpha, f32 - _nrAcc, delta);
+        cv::multiply(alpha3, f32 - _nrAcc, delta);
         cv::add(_nrAcc, delta, _nrAcc);
         _nrAcc.convertTo(frame, CV_8U);
-        frame.copyTo(_nrPrev);
+        _nrPrevGray = gray.clone();
     }
 
     // ---- 色斑清理 ----
@@ -213,7 +230,7 @@ private:
     cv::Ptr<cv::CLAHE> _clahe;   // 轻度局部均衡（空 = 关闭）
     cv::Mat _satLut;             // 饱和补偿 LUT（空 = 不补偿）
     cv::Mat _nrAcc;              // 时域降噪累加器（CV_32F）
-    cv::Mat _nrPrev;             // 上一帧输出（运动掩膜参考）
+    cv::Mat _nrPrevGray;         // 上一帧灰度（运动掩膜参考，单通道）
 };
 
 // RTSP 网络流：FFMPEG 后端 + socket 超时。
