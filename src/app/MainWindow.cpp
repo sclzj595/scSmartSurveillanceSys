@@ -5,6 +5,7 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QStyleFactory>
+#include <QStyle>
 #include <QCloseEvent>
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
@@ -215,31 +216,58 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUI()
 {
-    // 主布局
-    auto* mainLayout = new QVBoxLayout(this);
+    // ===== 工业监控风格骨架：标题栏 / 视频区 / 控制栏 / 状态栏（零边距拼接）=====
+    auto* root = new QVBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
 
-    // 视频显示
+    // ---- 标题栏：logo 色块 + 标题 + 状态 chips + 主题切换 ----
+    auto* header = new QWidget(this);
+    header->setObjectName("headerBar");
+    auto* headerLay = new QHBoxLayout(header);
+    headerLay->setContentsMargins(14, 8, 14, 8);
+    headerLay->setSpacing(10);
+
+    auto* logo = new QLabel(header);
+    logo->setObjectName("logoChip");
+    logo->setFixedSize(6, 18);
+    auto* title = new QLabel(QStringLiteral("智能安防监控"), header);
+    title->setObjectName("appTitle");
+    headerLay->addWidget(logo);
+    headerLay->addWidget(title);
+    headerLay->addSpacing(8);
+
+    _srcChip = new QLabel(header);          // 当前视频源（updateSourceChip 回显）
+    _srcChip->setObjectName("srcChip");
+    _svcChip = new QLabel(header);          // 服务层 HTTP/WS 状态（initMediaLink 回显）
+    _svcChip->setObjectName("svcChip");
+    headerLay->addStretch();
+    headerLay->addWidget(_srcChip);
+    headerLay->addWidget(_svcChip);
+
+    _themeToggleBtn = new QPushButton(header);
+    _themeToggleBtn->setObjectName("themeToggleBtn");
+    headerLay->addWidget(_themeToggleBtn);
+    connect(_themeToggleBtn, &QPushButton::clicked, this, &MainWindow::toggleTheme);
+    root->addWidget(header);
+
+    // ---- 视频区（带边距的圆角面板）----
+    auto* videoWrap = new QVBoxLayout;
+    videoWrap->setContentsMargins(12, 12, 12, 8);
     _videoLabel = new QLabel(this);
     _videoLabel->setAlignment(Qt::AlignCenter);      // 居中
     _videoLabel->setMinimumSize(640, 480);
     _videoLabel->setObjectName("videoLabel");        // 等会便于管理
     _rubberBand = new QRubberBand(QRubberBand::Rectangle, _videoLabel);  // 禁区绘制预览
-    mainLayout->addWidget(_videoLabel, 8);
+    videoWrap->addWidget(_videoLabel);
+    root->addLayout(videoWrap, 1);
 
-    // 日志
-    _logLabel = new QLabel("系统日志：准备就绪", this);
-    _logLabel->setFrameStyle(QFrame::Box);
-    _logLabel->setObjectName("logLabel");
-    mainLayout->addWidget(_logLabel, 2);  // 20%高度
-
-    // ===== 控制按钮区域 =====
-    QHBoxLayout *btnLayout = new QHBoxLayout();
-
-    // Theme
-    _themeToggleBtn = new QPushButton(this);
-    _themeToggleBtn->setObjectName("themeToggleBtn");
-    connect(_themeToggleBtn, &QPushButton::clicked, this, &MainWindow::toggleTheme);
-    btnLayout->addWidget(_themeToggleBtn);
+    // ---- 控制栏：全部功能按钮一排 ----
+    auto* btnBar = new QWidget(this);
+    btnBar->setObjectName("btnBar");
+    auto* btnLayout = new QHBoxLayout(btnBar);
+    btnLayout->setContentsMargins(12, 4, 12, 8);
+    btnLayout->setSpacing(8);
 
     // 人脸识别
     _faceRecogBtn = new QPushButton("人脸识别: 关闭", this);
@@ -250,11 +278,13 @@ void MainWindow::initUI()
         
         if (faceRecognitionEnabled) {
             _faceRecogBtn->setText("人脸识别: 开启");
+            setToggleState(_faceRecogBtn, true);
             _logLabel->setText("人脸识别已启用");
             // 通知人脸识别模块启用
             _faceRecognizer->setEnabled(true);
         } else {
             _faceRecogBtn->setText("人脸识别: 关闭");
+            setToggleState(_faceRecogBtn, false);
             _logLabel->setText("人脸识别已禁用");
             // 通知人脸识别模块禁用
             _faceRecognizer->setEnabled(false);
@@ -311,6 +341,7 @@ void MainWindow::initUI()
             QImage previewImg(previewMat.data, previewMat.cols, previewMat.rows,
                               previewMat.step, QImage::Format_BGR888);
             QLabel* preview = new QLabel(&dlg);
+            preview->setObjectName("previewLabel");
             preview->setPixmap(QPixmap::fromImage(previewImg));
             preview->setAlignment(Qt::AlignCenter);
 
@@ -377,6 +408,7 @@ void MainWindow::initUI()
             _mediaLink->stopStream();
             _streamOn = false;
             _streamBtn->setText(QStringLiteral("WebRTC推流: 关"));
+            setToggleState(_streamBtn, false);
             _logLabel->setText(QStringLiteral("推流已停止"));
         } else {
             const mlink::StreamConfig cfg;   // 默认 tools/ffmpeg.exe → rtsp://127.0.0.1:8554/sccam
@@ -388,6 +420,7 @@ void MainWindow::initUI()
                 _logLabel->setText(QStringLiteral("推流启动中，等待首帧…目标 %1").arg(QString::fromStdString(cfg.targetUrl)));
             _streamOn = true;
             _streamBtn->setText(QStringLiteral("WebRTC推流: 开"));
+            setToggleState(_streamBtn, true);
         }
     });
     btnLayout->addWidget(_streamBtn);
@@ -397,11 +430,42 @@ void MainWindow::initUI()
     connect(_sourceBtn, &QPushButton::clicked, this, &MainWindow::showSourceDialog);
     btnLayout->addWidget(_sourceBtn);
 
-    // 主布局里面加按钮布局
-    mainLayout->addLayout(btnLayout);
+    btnLayout->addStretch();      // 按钮左聚，右侧留白
+    root->addWidget(btnBar);
+
+    // ---- 状态栏：单行纤细日志（替代原 20% 高度大块）----
+    _logLabel = new QLabel("系统日志：准备就绪", this);
+    _logLabel->setObjectName("logLabel");
+    _logLabel->setFixedHeight(30);
+    root->addWidget(_logLabel);
+
+    updateSourceChip();           // 标题栏源 chip 初值（服务 chip 由 initMediaLink 回填）
 
     setWindowTitle("智能安防监控系统");
-    resize(1200, 800);
+    resize(1280, 860);
+}
+
+void MainWindow::setChipState(QLabel* chip, const QString& text, bool ok)
+{
+    chip->setText(text);
+    chip->setProperty("state", ok ? "ok" : "bad");
+    chip->style()->unpolish(chip);
+    chip->style()->polish(chip);
+}
+
+void MainWindow::updateSourceChip()
+{
+    const VideoSourceConfig cfg = loadSourceConfig();
+    setChipState(_srcChip, cfg.type == SourceType::RtspStream
+        ? QStringLiteral("源 RTSP")
+        : QStringLiteral("源 USB%1").arg(cfg.usbIndex), true);
+}
+
+void MainWindow::setToggleState(QPushButton* btn, bool on)
+{
+    btn->setProperty("state", on ? "on" : "off");
+    btn->style()->unpolish(btn);
+    btn->style()->polish(btn);
 }
 
 void MainWindow::initMediaLink()
@@ -434,11 +498,14 @@ void MainWindow::initMediaLink()
 
     if (_mediaLink->startHttp(8080)) {
         const bool wsOk = _mediaLink->startWs(8081);
+        setChipState(_svcChip, wsOk ? QStringLiteral("服务 :8080 · WS :8081")
+                                    : QStringLiteral("服务 :8080 · WS 未启动"), true);
         _logLabel->setText(QStringLiteral(
             "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）%1")
             .arg(wsOk ? QStringLiteral("；WS 事件推送 :8081 已开启")
                       : QStringLiteral("；WS :8081 端口被占用，事件推送未开启")));
     } else {
+        setChipState(_svcChip, QStringLiteral("服务未启动"), false);
         _logLabel->setText(QStringLiteral("HTTP :8080 端口被占用，数据服务未开启"));
     }
 }
@@ -512,6 +579,7 @@ void MainWindow::showSourceDialog()
     }
 
     saveSourceConfig(cfg);
+    updateSourceChip();           // 标题栏源 chip 同步
     if (_captureThread->switchSource(cfg))
         _logLabel->setText(QStringLiteral("视频源切换中…"));   // 后续状态经 sourceStatus 回显
     else
@@ -520,82 +588,228 @@ void MainWindow::showSourceDialog()
 
 void MainWindow::applyTheme(const QString &theme)
 {
+    // 工业监控风格双主题：面板化布局 + 圆角控件 + 状态色语义
+    // （深色：深蓝灰底 / 浅色：冷灰白底；两套色板同一套规则）
     if (theme == "dark") {
-        // ===== 深色主题 =====
         setStyleSheet(R"(
+            * { outline: none; }
             QWidget {
-                background-color: #2D2D30;
-                color: #E0E0E0;
-                font-family: 'Segoe UI', Arial, sans-serif;
+                background-color: #151a21;
+                color: #dde3ec;
+                font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+                font-size: 13px;
+            }
+            QLabel { background: transparent; }
+
+            /* ---- 标题栏 ---- */
+            QWidget#headerBar {
+                background-color: #1b222c;
+                border-bottom: 1px solid #262e3a;
+            }
+            QLabel#logoChip { background-color: #3b82f6; border-radius: 1px; }
+            QLabel#appTitle { color: #f2f5fa; font-size: 15px; font-weight: 600; }
+            QLabel#srcChip, QLabel#svcChip {
+                border: 1px solid #2e3a49; border-radius: 10px;
+                padding: 2px 10px; color: #9aa5b5; background-color: #202834;
                 font-size: 12px;
             }
+            QLabel#srcChip[state="ok"], QLabel#svcChip[state="ok"] {
+                color: #4ade80; border-color: #2f5e46;
+            }
+            QLabel#svcChip[state="bad"] {
+                color: #f87171; border-color: #5b2c2c;
+            }
+
+            /* ---- 视频面板 ---- */
             QLabel#videoLabel {
-                background-color: black;
+                background-color: #060809;
+                border: 1px solid #262e3a;
+                border-radius: 8px;
             }
-            QLabel#logLabel {
-                background-color: #1E1E1E;
-                color: #A0A0A0;
-                padding: 8px;
-                border: 1px solid #3F3F46;
-                border-radius: 4px;
-            }
+
+            /* ---- 控制栏按钮 ---- */
+            QWidget#btnBar { background: transparent; }
             QPushButton {
-                background-color: #005792;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                min-width: 100px;
+                background-color: #222b37;
+                color: #dbe2ec;
+                border: 1px solid #2e3a49;
+                border-radius: 6px;
+                padding: 7px 16px;
+                min-width: 88px;
             }
-            QPushButton:hover {
-                background-color: #006DB2;
+            QPushButton:hover { background-color: #2a3543; border-color: #3d4c60; }
+            QPushButton:pressed { background-color: #1f2833; }
+            QPushButton:disabled { color: #5c6673; border-color: #262e3a; }
+            QPushButton[state="on"] {          /* 开关型按钮：开启态绿描边 */
+                color: #4ade80; border-color: #2f5e46; background-color: #182219;
             }
-            QPushButton:pressed {
-                background-color: #004A7A;
+            QPushButton[state="on"]:hover { border-color: #3d7a5c; }
+            QPushButton:checked {              /* 禁区绘制模式：琥珀提示 */
+                color: #fbbf24; border-color: #8a5a12; background-color: #241d10;
             }
             QPushButton#themeToggleBtn {
-                background-color: #27AE60;
+                min-width: 0; padding: 5px 12px; color: #9aa5b5; font-size: 12px;
             }
+            QPushButton#themeToggleBtn:hover { color: #dde3ec; }
+
+            /* ---- 状态栏（单行日志）---- */
+            QLabel#logLabel {
+                background-color: #10141a;
+                color: #8b95a5;
+                border-top: 1px solid #262e3a;
+                padding: 0 14px;
+            }
+
+            /* ---- 弹窗（注册/切源/历史）---- */
+            QDialog { background-color: #1b222c; }
+            QLabel#previewLabel { border: 1px solid #2e3a49; border-radius: 6px; background: #10141a; }
+            QLineEdit, QComboBox {
+                background-color: #10141a;
+                border: 1px solid #2e3a49;
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: #dde3ec;
+            }
+            QLineEdit:focus, QComboBox:focus { border-color: #3b82f6; }
+            QComboBox::drop-down { border: none; width: 22px; }
+            QComboBox QAbstractItemView {
+                background-color: #222b37; border: 1px solid #2e3a49;
+                selection-background-color: #2f4368;
+            }
+            QPushButton#closeBtn { min-width: 72px; }
+
+            /* ---- 历史记录表格 ---- */
+            QTableWidget {
+                background-color: #151a21;
+                border: 1px solid #2e3a49;
+                border-radius: 6px;
+                gridline-color: #232b36;
+                selection-background-color: #2f4368;
+                selection-color: #ffffff;
+            }
+            QTableWidget::item { padding: 4px; }
+            QHeaderView::section {
+                background-color: #1b222c;
+                color: #9aa5b5;
+                border: none;
+                border-bottom: 1px solid #2e3a49;
+                padding: 6px 8px;
+            }
+            QScrollBar:vertical { background: #151a21; width: 10px; }
+            QScrollBar::handle:vertical { background: #2e3a49; border-radius: 5px; min-height: 30px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         )");
-        _themeToggleBtn->setText("切换到浅色主题");
+        _themeToggleBtn->setText("浅色");
     } else {
-        // ===== 浅色主题 =====
         setStyleSheet(R"(
+            * { outline: none; }
             QWidget {
-                background-color: #F0F0F0;
-                color: #333333;
-                font-family: 'Segoe UI', Arial, sans-serif;
+                background-color: #f3f5f8;
+                color: #1f2430;
+                font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+                font-size: 13px;
+            }
+            QLabel { background: transparent; }
+
+            /* ---- 标题栏 ---- */
+            QWidget#headerBar {
+                background-color: #ffffff;
+                border-bottom: 1px solid #e2e7ee;
+            }
+            QLabel#logoChip { background-color: #3b82f6; border-radius: 1px; }
+            QLabel#appTitle { color: #111827; font-size: 15px; font-weight: 600; }
+            QLabel#srcChip, QLabel#svcChip {
+                border: 1px solid #d5dce5; border-radius: 10px;
+                padding: 2px 10px; color: #5b6675; background-color: #f6f8fb;
                 font-size: 12px;
             }
+            QLabel#srcChip[state="ok"], QLabel#svcChip[state="ok"] {
+                color: #15803d; border-color: #bbe3c8;
+            }
+            QLabel#svcChip[state="bad"] {
+                color: #b91c1c; border-color: #f0c4c4;
+            }
+
+            /* ---- 视频面板 ---- */
             QLabel#videoLabel {
-                background-color: #E0E0E0;
+                background-color: #060809;
+                border: 1px solid #d5dce5;
+                border-radius: 8px;
             }
-            QLabel#logLabel {
-                background-color: white;
-                color: #555555;
-                padding: 8px;
-                border: 1px solid #CCCCCC;
-                border-radius: 4px;
-            }
+
+            /* ---- 控制栏按钮 ---- */
+            QWidget#btnBar { background: transparent; }
             QPushButton {
-                background-color: #3498DB;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                min-width: 100px;
+                background-color: #ffffff;
+                color: #374151;
+                border: 1px solid #d5dce5;
+                border-radius: 6px;
+                padding: 7px 16px;
+                min-width: 88px;
             }
-            QPushButton:hover {
-                background-color: #5DADE2;
+            QPushButton:hover { background-color: #f0f4f9; border-color: #b9c4d2; }
+            QPushButton:pressed { background-color: #e6ecf3; }
+            QPushButton:disabled { color: #a8b1bd; border-color: #e2e7ee; }
+            QPushButton[state="on"] {
+                color: #15803d; border-color: #87c9a0; background-color: #effaf3;
             }
-            QPushButton:pressed {
-                background-color: #2E86C1;
+            QPushButton[state="on"]:hover { border-color: #4fae72; }
+            QPushButton:checked {
+                color: #b45309; border-color: #e3b877; background-color: #fdf6e7;
             }
             QPushButton#themeToggleBtn {
-                background-color: #E74C3C;
+                min-width: 0; padding: 5px 12px; color: #5b6675; font-size: 12px;
             }
+            QPushButton#themeToggleBtn:hover { color: #1f2430; }
+
+            /* ---- 状态栏 ---- */
+            QLabel#logLabel {
+                background-color: #ffffff;
+                color: #6b7482;
+                border-top: 1px solid #e2e7ee;
+                padding: 0 14px;
+            }
+
+            /* ---- 弹窗 ---- */
+            QDialog { background-color: #ffffff; }
+            QLabel#previewLabel { border: 1px solid #d5dce5; border-radius: 6px; background: #f3f5f8; }
+            QLineEdit, QComboBox {
+                background-color: #ffffff;
+                border: 1px solid #d5dce5;
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: #1f2430;
+            }
+            QLineEdit:focus, QComboBox:focus { border-color: #3b82f6; }
+            QComboBox::drop-down { border: none; width: 22px; }
+            QComboBox QAbstractItemView {
+                background-color: #ffffff; border: 1px solid #d5dce5;
+                selection-background-color: #dbeafe;
+            }
+            QPushButton#closeBtn { min-width: 72px; }
+
+            /* ---- 历史记录表格 ---- */
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1px solid #d5dce5;
+                border-radius: 6px;
+                gridline-color: #e8edf3;
+                selection-background-color: #dbeafe;
+                selection-color: #1f2430;
+            }
+            QTableWidget::item { padding: 4px; }
+            QHeaderView::section {
+                background-color: #f6f8fb;
+                color: #5b6675;
+                border: none;
+                border-bottom: 1px solid #d5dce5;
+                padding: 6px 8px;
+            }
+            QScrollBar:vertical { background: #f3f5f8; width: 10px; }
+            QScrollBar::handle:vertical { background: #c8d2de; border-radius: 5px; min-height: 30px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         )");
-        _themeToggleBtn->setText("切换到深色主题");
+        _themeToggleBtn->setText("深色");
     }
 
     // 更新主题状态

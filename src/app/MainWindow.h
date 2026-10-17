@@ -52,6 +52,11 @@ private:
     void initUI();
     void applyTheme(const QString& theme);
     void saveThemeConfig();
+    // 开关型按钮的 on/off 视觉态（动态属性 + 重刷样式，QSS 里 QPushButton[state="on"]）
+    static void setToggleState(QPushButton* btn, bool on);
+    // 标题栏状态 chips（ok → 绿 / bad → 红）
+    void setChipState(QLabel* chip, const QString& text, bool ok);
+    void updateSourceChip();   // 依 sys_param.ini 当前源配置回显
 
     // 视频源配置（V0.6 统一源接口）：sys_param.ini 持久化 + 切换对话框
     VideoSourceConfig loadSourceConfig() const;
@@ -66,6 +71,8 @@ private:
     QPushButton* _forbiddenZoneBtn;
     QPushButton* _registerFaceBtn;
     QPushButton* _sourceBtn = nullptr;    // 视频源切换（V0.6：USB / RTSP）
+    QLabel* _srcChip = nullptr;           // 标题栏：当前视频源（USB0 / RTSP url）
+    QLabel* _svcChip = nullptr;           // 标题栏：服务层状态（HTTP :8080 · WS :8081）
     VideoCaptureThread* _captureThread;
     AnalysisThread* _analysisThread;
     QTimer* _renderTimer;

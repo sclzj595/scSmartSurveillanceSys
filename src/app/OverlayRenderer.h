@@ -31,6 +31,10 @@ public:
 
 private:
     static QRect toQRect(const cv::Rect& r);
+    // AI 检测风格的四角括号框（比全框更轻）
+    static void drawCornerBox(QPainter& p, const QRect& r,
+                              const QColor& color, int weight);
+    // 框上方圆角标签 chip（色点 + 文字）
     static void drawLabel(QPainter& p, const QRect& box,
                           const QString& text, const QColor& color);
 };
