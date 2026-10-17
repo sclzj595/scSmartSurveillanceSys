@@ -437,6 +437,7 @@ AnalysisResult {
     <tr><td class="num">Q7</td><td><span class="tbd">[TBD]</span> S2 远程视频：WebRTC 评估结论（自建 SFU vs P2P vs 放弃远程视频仅推送告警）</td><td>移动端形态</td></tr>
     <tr><td class="num">Q8</td><td><span class="tbd">[TBD]</span> 引擎是否拆出独立服务进程（当前进程内分层已满足，拆分触发条件需定义）</td><td>S2/S3 架构</td></tr>
     <tr><td class="num">Q9</td><td><span class="tbd">[TBD]</span> LBPH 阈值标定：采集同人/异人相似度实测样本（陌生人标签已显示%），确定 55% 与映射系数 <code>100−30d</code> 是否定版</td><td>6.2 识别口径</td></tr>
+    <tr><td class="num">Q10</td><td><span class="tbd">[TBD]</span> 算法库升级路径：FaceAlgorithm 当前为编译期链接（方案1 静态/共享库）；是否升级为 Qt 插件运行时加载（方案2，换算法不改主程序）？触发条件建议：出现第三种识别算法（如 ArcFace）或多机部署需求时再评估</td><td>4.3 能力归属 / 7 章设备接入</td></tr>
   </tbody>
 </table>
 
@@ -461,6 +462,9 @@ AnalysisResult {
     <tr><td>2026-10-17</td><td class="num"><code>3bff63e</code></td><td><strong>feat</strong>：注册两段式交互——弹窗人脸预览 + 姓名编辑，建议名自动编号，同名=补充样本（6.3）</td></tr>
     <tr><td>2026-10-17</td><td class="num"><code>09d36df</code></td><td><strong>fix</strong>：识别永不命中（D12）→ LBPH 改网格直方图比对，距离值域收敛 0–5.66，相似度映射定版，陌生人标签附相似度%</td></tr>
     <tr><td>2026-10-17</td><td>本次提交</td><td>PRD v2.1：同步 D10–D12 处置、新增 6.3 注册交互规范 / 6.4 工程纪律、指标实测数据回填、新增 Q9 阈值标定</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>84ef198</code></td><td><strong>feat(V0.4)</strong>：事件持久化——EventStore 异步落盘（R2 冷却/R4 失败不阻塞）+ 截图存证搭车渲染节拍 + 历史查询对话框（8.3）</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>c49b21f</code></td><td><strong>chore</strong>：课程版 Python 源码目录更名 <code>pyCore--standard</code></td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>4198365</code></td><td><strong>feat(架构)</strong>：算法库组件化——人脸识别抽为独立 <code>FaceAlgorithm.dll</code>（f:/CODE/Qt_forNoVS/FaceAlgorithm 独立仓库，业务无关、不依赖 Qt），监控与人脸闸机双项目共用；本仓库 FaceRecognition 降为业务适配器（净删 316 行）。证据：DLL 独立构建 + smoke 回环测试 PASS（注册后自识别 sim=100）；主程序链接运行正常。升级预案（方案2 动态插件）见 12 章开放问题 Q10</td></tr>
   </tbody>
 </table>
 
