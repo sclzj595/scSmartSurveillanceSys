@@ -79,8 +79,11 @@ void MainWindow::renderTick()
         return;                 // 无新帧（暂停/断流）→ 保持上一画面
     _lastFrame = frame;         // 引用计数拷贝（只读，注册人脸用）
 
-    // 服务层推流（PRD 第 9 章）：渲染帧搭车喂给 MediaLink 内部最新帧槽（非阻塞）
-    if (_streamOn && _mediaLink && !_lastFrame.empty())
+    // 服务层推流（PRD 第 9 章 / FR-06 流内容语义）：
+    // 呈现帧模式（默认）：推"标注后帧"，网页画面与桌面一致（家用摄像头业界通行做法）
+    // 原始帧模式：Stream/annotated=false 时推原始帧，叠加由客户端按结构化数据自绘（方案 B 前置）
+    const bool pushAnnotated = _settings->value("Stream/annotated", true).toBool();
+    if (!pushAnnotated && _streamOn && _mediaLink && !_lastFrame.empty())
         _mediaLink->pushFrame(_lastFrame.data, _lastFrame.cols, _lastFrame.rows,
                               int(_lastFrame.step));
     const qint64 frameAgeMs = _frameBank->ageMs();  // 帧龄须在 load 后立刻取，晚了不准
@@ -108,6 +111,11 @@ void MainWindow::renderTick()
     QImage image(draw.data, draw.cols, draw.rows, draw.step, QImage::Format_BGR888);
     _hud.latencyMs = frameAgeMs;
     OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
+
+    // 呈现帧模式推流（默认）：paint 后 draw 即标注帧，搭车喂给服务层
+    if (pushAnnotated && _streamOn && _mediaLink)
+        _mediaLink->pushFrame(draw.data, draw.cols, draw.rows, int(draw.step));
+
     updateVideoFrame(image);
 
     // 事件搭车截图：本帧标注图恰好为全分辨率存证所需，一并交给落盘线程
@@ -402,7 +410,8 @@ void MainWindow::initUI()
             setToggleState(_streamBtn, false);
             _logLabel->setText(QStringLiteral("推流已停止"));
         } else {
-            const mlink::StreamConfig cfg;   // 默认 tools/ffmpeg.exe → rtsp://127.0.0.1:8554/sccam
+            mlink::StreamConfig cfg;         // 默认 tools/ffmpeg.exe → rtsp://127.0.0.1:8554/sccam
+            cfg.bitrateKbps = 2500;          // 呈现帧含标注文字，码率上调保清晰度
             _mediaLink->setStreamConfig(cfg);
             if (!_mediaLink->startStream())
                 _logLabel->setText(QStringLiteral(
@@ -496,17 +505,22 @@ void MainWindow::initMediaLink()
     };
     _mediaLink->setProviders(p);
 
-    if (_mediaLink->startHttp(8080)) {
-        const bool wsOk = _mediaLink->startWs(8081);
-        setChipState(_svcChip, wsOk ? QStringLiteral("服务 :8080 · WS :8081")
-                                    : QStringLiteral("服务 :8080 · WS 未启动"), true);
+    // 端口宿主侧可配置（FR-09 前置）：Server/httpPort 缺省 8080（契约锁定缺省值），
+    // 本机 8080 常驻 SpringBoot 服务时可在 sys_param.ini 写 Server/httpPort=18080
+    const int httpPort = _settings->value("Server/httpPort", 8080).toInt();
+    const int wsPort   = _settings->value("Server/wsPort", 8081).toInt();
+    if (_mediaLink->startHttp(httpPort)) {
+        const bool wsOk = _mediaLink->startWs(wsPort);
+        setChipState(_svcChip, wsOk ? QStringLiteral("服务 :%1 · WS :%2").arg(httpPort).arg(wsPort)
+                                    : QStringLiteral("服务 :%1 · WS 未启动").arg(httpPort), true);
         _logLabel->setText(QStringLiteral(
-            "HTTP 数据服务 :8080 已开启（/api/health /api/events /api/persons /api/stream）%1")
-            .arg(wsOk ? QStringLiteral("；WS 事件推送 :8081 已开启")
-                      : QStringLiteral("；WS :8081 端口被占用，事件推送未开启")));
+            "HTTP 数据服务 :%1 已开启（/api/health /api/events /api/persons /api/stream）%2")
+            .arg(httpPort)
+            .arg(wsOk ? QStringLiteral("；WS 事件推送 :%1 已开启").arg(wsPort)
+                      : QStringLiteral("；WS :%1 端口被占用，事件推送未开启").arg(wsPort)));
     } else {
         setChipState(_svcChip, QStringLiteral("服务未启动"), false);
-        _logLabel->setText(QStringLiteral("HTTP :8080 端口被占用，数据服务未开启"));
+        _logLabel->setText(QStringLiteral("HTTP :%1 端口被占用，数据服务未开启").arg(httpPort));
     }
 }
 
