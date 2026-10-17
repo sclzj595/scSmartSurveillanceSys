@@ -1,6 +1,7 @@
 // MainWindow.cpp
 #include "MainWindow.h"
 #include "dataConfig.h"
+#include "WinTheme.h"
 
 #include <QFile>
 #include <QMessageBox>
@@ -333,6 +334,9 @@ void MainWindow::initUI()
             QDialog dlg(this);
             dlg.setWindowTitle(QStringLiteral("注册人脸"));
             dlg.setMinimumWidth(260);
+#ifdef Q_OS_WIN
+            wintheme::applyDarkTitleBar(&dlg, _currentTheme == "dark");
+#endif
             QVBoxLayout* lay = new QVBoxLayout(&dlg);
 
             cv::Mat previewMat;
@@ -397,6 +401,9 @@ void MainWindow::initUI()
     _historyBtn = new QPushButton("历史记录", this);
     connect(_historyBtn, &QPushButton::clicked, this, [this]() {
         EventHistoryDialog dlg(this);
+#ifdef Q_OS_WIN
+        wintheme::applyDarkTitleBar(&dlg, _currentTheme == "dark");
+#endif
         dlg.exec();
     });
     btnLayout->addWidget(_historyBtn);
@@ -537,6 +544,9 @@ void MainWindow::showSourceDialog()
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("切换视频源"));
     dlg.setMinimumWidth(360);
+#ifdef Q_OS_WIN
+    wintheme::applyDarkTitleBar(&dlg, _currentTheme == "dark");
+#endif
     auto* form = new QFormLayout(&dlg);
 
     QComboBox* typeBox = new QComboBox(&dlg);
@@ -814,6 +824,11 @@ void MainWindow::applyTheme(const QString &theme)
 
     // 更新主题状态
     _currentTheme = theme;
+
+    // Windows 原生标题栏跟随主题（DWM：深色模式 + Win11 精确配色，旧系统静默跳过）
+#ifdef Q_OS_WIN
+    wintheme::applyDarkTitleBar(this, theme == "dark");
+#endif
 }
 
 void MainWindow::saveThemeConfig()

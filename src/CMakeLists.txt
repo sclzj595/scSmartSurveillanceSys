@@ -24,6 +24,9 @@ target_link_libraries(SmartSurveillance
     FaceAlgorithm      # 可插拔人脸算法库 DLL（同一构建树，产物自动落 build/bin）
     medialink          # 独立服务层：HTTP 数据服务 + WebRTC 推流（PRD 第 9 章）
 )
+if(WIN32)
+  target_link_libraries(SmartSurveillance dwmapi)   # 原生标题栏深色主题（WinTheme.h）
+endif()
 
 # 设置目标属性 - 确保在build/bin下
 set_target_properties(SmartSurveillance PROPERTIES
