@@ -38,11 +38,16 @@ struct VideoSourceConfig
     int readTimeoutMs  = 3000;       // RTSP socket I/O 上界（建连/读帧共用）：断网时 read 有界返回，不挂线程
     int reconnectBaseMs = 500;       // D9 重连退避起点
     int reconnectMaxMs  = 8000;      // D9 重连退避上限
+    // 曝光控制（阶段02 实测项）：打开瞬间 AE 从高增益起点收敛 → 开头几秒过曝；
+    // 逆光场景 AE 拉长曝光 → 帧率被压到 ~9fps。autoExposure=false 时锁死快门
+    bool autoExposure = true;        // true=自动曝光+打开后暖机冲刷（等收敛再出画）
+    double exposure = -6.0;          // 手动曝光（DSHOW log2 秒：-6≈1/64s，可保 30fps）
 
     bool operator==(const VideoSourceConfig& o) const
     {
         return type == o.type && usbIndex == o.usbIndex && url == o.url
-            && width == o.width && height == o.height && fps == o.fps;
+            && width == o.width && height == o.height && fps == o.fps
+            && autoExposure == o.autoExposure && exposure == o.exposure;
     }
     bool operator!=(const VideoSourceConfig& o) const { return !(*this == o); }
 };

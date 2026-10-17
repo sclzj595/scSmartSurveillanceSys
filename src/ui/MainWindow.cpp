@@ -554,6 +554,10 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
     cfg.width  = _settings->value("Source/width",  640).toInt();
     cfg.height = _settings->value("Source/height", 480).toInt();
     cfg.fps    = _settings->value("Source/fps",     30).toInt();
+    // 曝光（阶段02 实测项）：刚开启过曝 / 逆光低帧率时，可 ini 设
+    // Camera/autoExposure=0 + Camera/exposure=-6（log2 秒，-6≈1/64s 保 30fps）
+    cfg.autoExposure = _settings->value("Camera/autoExposure", true).toBool();
+    cfg.exposure     = _settings->value("Camera/exposure", -6.0).toDouble();
     return cfg;
 }
 
@@ -565,6 +569,8 @@ void MainWindow::saveSourceConfig(const VideoSourceConfig& cfg)
     _settings->setValue("Source/width",  cfg.width);
     _settings->setValue("Source/height", cfg.height);
     _settings->setValue("Source/fps",    cfg.fps);
+    _settings->setValue("Camera/autoExposure", cfg.autoExposure);
+    _settings->setValue("Camera/exposure",     cfg.exposure);
     _settings->sync();
 }
 

@@ -1,7 +1,9 @@
 #include "pipeline/VideoSource.h"
 
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QtGlobal>
+#include <opencv2/imgproc.hpp>
 
 namespace {
 
@@ -26,11 +28,24 @@ public:
         _cap.set(cv::CAP_PROP_FRAME_HEIGHT, _cfg.height > 0 ? _cfg.height : 480);
         _cap.set(cv::CAP_PROP_FPS,          _cfg.fps    > 0 ? _cfg.fps    : 30);
         _cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        // 曝光控制（阶段02 实测项）：打开瞬间 AE 从高增益起点收敛 → 开头几秒过曝；
+        // 逆光场景 AE 拉长曝光时间 → 帧率被压到个位数。DSHOW 后端 AUTO_EXPOSURE
+        // 取菜单标志：0.75=自动连续，0.25=手动（再配 EXPOSURE=log2 秒）。
+        // 驱动不支持某项时 set 返回 false 自动忽略，无副作用
+        if (_cfg.autoExposure) {
+            _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.75);   // 重申自动：让 AE 从当前场景重新收敛
+        } else {
+            _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.25);   // 手动：锁死快门（帧率与亮度双稳定）
+            _cap.set(cv::CAP_PROP_EXPOSURE, _cfg.exposure);
+        }
         qInfo() << "USB source opened:"
                 << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
                 << "fps=" << _cap.get(cv::CAP_PROP_FPS)
+                << "autoExp=" << _cfg.autoExposure
                 << "fourcc=" << QString::number(
                        static_cast<int>(_cap.get(cv::CAP_PROP_FOURCC)), 16);
+        if (_cfg.autoExposure)
+            warmUpAutoExposure();   // 冲掉 AE 收敛期的过曝帧（用户实测"刚开启过曝"）
         return true;
     }
     bool read(cv::Mat& out) override { _cap >> out; return !out.empty(); }
@@ -46,6 +61,33 @@ public:
     }
 
 private:
+    // AE 暖机冲刷：打开后丢弃帧直到亮度稳定（连续两帧均值差 < 2.5），
+    // 有界 ~1.2s / 30 帧——收敛完成前不对外出画，首帧即正常曝光。
+    // 亮度用 64x64 缩略图均值，单次开销微秒级，不拖慢打开路径
+    void warmUpAutoExposure()
+    {
+        QElapsedTimer timer;
+        timer.start();
+        cv::Mat f, small, gray;
+        double prevMean = -1.0;
+        int stable = 0, discarded = 0;
+        while (discarded < 30 && timer.elapsed() < 1200) {
+            _cap >> f;
+            if (f.empty()) break;
+            ++discarded;
+            cv::resize(f, small, cv::Size(64, 64), 0, 0, cv::INTER_AREA);
+            cv::cvtColor(small, gray, cv::COLOR_BGR2GRAY);
+            const double mean = cv::mean(gray)[0];
+            if (prevMean >= 0 && qAbs(mean - prevMean) < 2.5) {
+                if (++stable >= 2) break;   // 连续 3 帧亮度稳定 → AE 已收敛
+            } else {
+                stable = 0;
+            }
+            prevMean = mean;
+        }
+        qInfo() << "AE warm-up: discarded" << discarded << "frames in" << timer.elapsed() << "ms";
+    }
+
     VideoSourceConfig _cfg;
     cv::VideoCapture _cap;
 };
