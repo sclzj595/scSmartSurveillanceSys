@@ -11,6 +11,8 @@ set(APP_SOURCES
     ui/OverlayRenderer.h        ui/OverlayRenderer.cpp
     ui/EventHistoryDialog.h     ui/EventHistoryDialog.cpp
     ui/WinTheme.h
+    ui/theme/DesignTokens.h     # 设计令牌（颜色/圆角/间距刻度单点）
+    ui/theme/ThemeManager.h     ui/theme/ThemeManager.cpp   # 主题单点：令牌→QSS/原生标题栏
     # pipeline —— 异步识别管线
     pipeline/FrameBank.h
     pipeline/VideoSource.h      pipeline/VideoSource.cpp
