@@ -13,8 +13,8 @@
 
 #include <QThread>
 #include <atomic>
-#include "FrameBank.h"
-#include "AnalysisTypes.h"
+#include "pipeline/FrameBank.h"
+#include "core/AnalysisTypes.h"
 
 class FaceRecognition;
 class ObjectDetection;

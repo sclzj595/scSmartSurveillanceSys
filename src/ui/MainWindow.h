@@ -4,13 +4,13 @@
 
 #pragma execution_character_set("utf-8")
 
-#include "VideoCaptureThread.h"
-#include "AnalysisThread.h"
-#include "IntrusionDetection.h"
-#include "FaceRecognition.h"
-#include "ObjectDetection.h"
+#include "pipeline/VideoCaptureThread.h"
+#include "pipeline/AnalysisThread.h"
+#include "vision/IntrusionDetection.h"
+#include "vision/FaceRecognition.h"
+#include "vision/ObjectDetection.h"
 #include "OverlayRenderer.h"
-#include "EventStore.h"
+#include "events/EventStore.h"
 #include <QWidget>
 #include <QVBoxLayout>
 #include <QHBoxLayout>

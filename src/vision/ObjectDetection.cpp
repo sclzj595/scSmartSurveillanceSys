@@ -1,4 +1,4 @@
-#include "ObjectDetection.h"
+#include "vision/ObjectDetection.h"
 #include <QDebug>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/video.hpp> // 确保包含video模块头文件

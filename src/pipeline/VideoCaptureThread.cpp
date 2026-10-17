@@ -1,4 +1,4 @@
-#include "VideoCaptureThread.h"
+#include "pipeline/VideoCaptureThread.h"
 
 #include <QDateTime>
 #include <QDebug>

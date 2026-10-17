@@ -1,5 +1,5 @@
 // qt界面入口
-#include "MainWindow.h"
+#include "ui/MainWindow.h"
 #include <QApplication>
 #include <QMetaType>
 

@@ -1,4 +1,4 @@
-#include "VideoSource.h"
+#include "pipeline/VideoSource.h"
 
 #include <QDebug>
 #include <QtGlobal>

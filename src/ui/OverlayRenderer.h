@@ -9,7 +9,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QString>
-#include "AnalysisTypes.h"
+#include "core/AnalysisTypes.h"
 
 class OverlayRenderer
 {

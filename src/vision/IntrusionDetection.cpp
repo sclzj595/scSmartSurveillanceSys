@@ -1,4 +1,4 @@
-#include "IntrusionDetection.h"
+#include "vision/IntrusionDetection.h"
 #include <QDebug>
 
 IntrusionDetection::IntrusionDetection(QObject *parent) : QObject(parent) {}

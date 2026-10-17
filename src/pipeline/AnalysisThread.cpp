@@ -1,12 +1,12 @@
 // src/app/AnalysisThread.cpp
-#include "AnalysisThread.h"
+#include "pipeline/AnalysisThread.h"
 
 #include <QElapsedTimer>
 #include <QDebug>
 #include <opencv2/core.hpp>
-#include "FaceRecognition.h"
-#include "ObjectDetection.h"
-#include "IntrusionDetection.h"
+#include "vision/FaceRecognition.h"
+#include "vision/ObjectDetection.h"
+#include "vision/IntrusionDetection.h"
 
 AnalysisThread::AnalysisThread(FrameBank* bank,
                                FaceRecognition* face,

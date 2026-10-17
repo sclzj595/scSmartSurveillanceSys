@@ -16,8 +16,8 @@
 #include <vector>
 #include <map>
 #include <facealgorithm/FaceAlgorithm.h>
-#include "dataConfig.h"
-#include "AnalysisTypes.h"
+#include "core/dataConfig.h"
+#include "core/AnalysisTypes.h"
 
 class FaceRecognition : public QObject
 {

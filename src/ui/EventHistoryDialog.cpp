@@ -1,7 +1,7 @@
 // EventHistoryDialog.cpp
 #include "EventHistoryDialog.h"
-#include "EventStore.h"
-#include "dataConfig.h"
+#include "events/EventStore.h"
+#include "core/dataConfig.h"
 #include "WinTheme.h"
 
 #include <QHBoxLayout>

@@ -1,6 +1,6 @@
 // MainWindow.cpp
 #include "MainWindow.h"
-#include "dataConfig.h"
+#include "core/dataConfig.h"
 #include "WinTheme.h"
 
 #include <QFile>

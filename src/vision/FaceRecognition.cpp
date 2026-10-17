@@ -1,5 +1,5 @@
 // FaceRecognition.cpp —— 算法库适配器（算法本体在 ../FaceAlgorithm 独立 DLL）
-#include "FaceRecognition.h"
+#include "vision/FaceRecognition.h"
 #include <QDebug>
 #include <QMutexLocker>
 #include <QFile>

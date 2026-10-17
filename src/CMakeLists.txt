@@ -1,18 +1,40 @@
-# 包含头文件目录
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+# 模块化源码结构（依赖单向：ui → {pipeline, vision, events} → core）
+#   ui/       Qt 表现层：主窗口/标注渲染/历史对话框/原生标题栏主题
+#   pipeline/ 异步识别管线：FrameBank 最新帧槽 + 采集/分析线程 + 统一视频源（FR-01, V0.6）
+#   vision/   识别引擎适配器：人脸/遗留物/禁区（业务判定与算法翻译）
+#   events/   事件持久化：events.jsonl + 截图存证（PRD 第 8 章）
+#   core/     领域类型与配置：AnalysisResult / dataConfig（零依赖，被所有层引用）
+set(APP_SOURCES
+    # ui —— 表现层
+    ui/main.cpp
+    ui/MainWindow.h             ui/MainWindow.cpp
+    ui/OverlayRenderer.h        ui/OverlayRenderer.cpp
+    ui/EventHistoryDialog.h     ui/EventHistoryDialog.cpp
+    ui/WinTheme.h
+    # pipeline —— 异步识别管线
+    pipeline/FrameBank.h
+    pipeline/VideoSource.h      pipeline/VideoSource.cpp
+    pipeline/VideoCaptureThread.h pipeline/VideoCaptureThread.cpp
+    pipeline/AnalysisThread.h   pipeline/AnalysisThread.cpp
+    # vision —— 识别引擎适配器
+    vision/FaceRecognition.h    vision/FaceRecognition.cpp
+    vision/ObjectDetection.h    vision/ObjectDetection.cpp
+    vision/IntrusionDetection.h vision/IntrusionDetection.cpp
+    # events —— 事件持久化
+    events/EventStore.h         events/EventStore.cpp
+    # core —— 领域类型与配置
+    core/dataConfig.h
+    core/AnalysisTypes.h
+)
+
+# 添加可执行目标（显式清单：新增文件必须显式登记，防止 GLOB 隐式收编漏 moc）
+add_executable(SmartSurveillance ${APP_SOURCES})
+
+# 头文件查找根 = src/（模块前缀 include：#include "pipeline/FrameBank.h"）
+target_include_directories(SmartSurveillance PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}  # 用于自动生成的MOC文件
 )
-
-# 收集源文件
-file(GLOB SRCS 
-    "app/*.cpp"
-    "app/*.h" 
-    "include/*.h"
-)
-
-# 添加可执行目标
-add_executable(SmartSurveillance ${SRCS})
 
 # 链接库
 target_link_libraries(SmartSurveillance

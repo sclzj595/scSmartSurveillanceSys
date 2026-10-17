@@ -1,6 +1,6 @@
 // EventStore.cpp
-#include "EventStore.h"
-#include "dataConfig.h"
+#include "events/EventStore.h"
+#include "core/dataConfig.h"
 
 #include <QDir>
 #include <QFile>

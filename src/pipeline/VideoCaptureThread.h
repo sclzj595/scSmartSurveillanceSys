@@ -4,9 +4,9 @@
 
 #pragma execution_character_set("utf-8")
 
-#include "dataConfig.h"
-#include "FrameBank.h"
-#include "VideoSource.h"
+#include "core/dataConfig.h"
+#include "pipeline/FrameBank.h"
+#include "pipeline/VideoSource.h"
 #include <QThread>
 #include <QMutex>
 #include <QMutexLocker>

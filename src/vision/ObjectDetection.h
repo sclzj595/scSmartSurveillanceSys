@@ -3,13 +3,13 @@
 
 #pragma execution_character_set("utf-8")
 
-#include "dataConfig.h"
+#include "core/dataConfig.h"
 #include <QObject>
 #include <opencv2/opencv.hpp>
 #include <map>
 #include <QMutex>
 #include <QDateTime>
-#include "AnalysisTypes.h"
+#include "core/AnalysisTypes.h"
 
 class ObjectDetection : public QObject
 {

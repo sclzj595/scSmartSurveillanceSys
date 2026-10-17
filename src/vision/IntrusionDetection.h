@@ -4,12 +4,12 @@
 
 #pragma execution_character_set("utf-8")
 
-#include "dataConfig.h"
+#include "core/dataConfig.h"
 #include <QObject>
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <QMutex>
-#include "AnalysisTypes.h"
+#include "core/AnalysisTypes.h"
 
 class IntrusionDetection : public QObject
 {
