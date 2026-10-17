@@ -29,6 +29,7 @@ struct SecurityEvent {
 
     Type type = FaceKnown;
     qint64 tsMs = 0;          // epoch ms（落盘时刻，判定与截图差 <100ms）
+    int seq = 0;              // 同毫秒序号（A5 去碰撞：id = e<tsMs>-<seq>，进程内单调）
     QString subject;          // 对象：人名 / "陌生人" / "禁区" / "画面目标"
     double similarity = -1.0; // R1 口径 0~100；-1 = 不适用
     QString detail;           // 中文描述

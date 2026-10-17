@@ -69,10 +69,15 @@ public slots:
         }
         for (SecurityEvent& e : events) {
             e.tsMs = now.toMSecsSinceEpoch();
+            // A5 去碰撞：同毫秒内单调自增（worker 单线程串行执行，无竞争）
+            e.seq = (e.tsMs == _lastTsMs) ? _lastSeq + 1 : 0;
+            _lastTsMs = e.tsMs;
+            _lastSeq = e.seq;
             e.imagePath = imageRel;
 
             QJsonObject o;
             o.insert("ts", static_cast<qint64>(e.tsMs));
+            o.insert("seq", e.seq);   // 落盘：重启回读后 id 稳定
             o.insert("type", SecurityEvent::typeKey(e.type));
             o.insert("subject", e.subject);
             o.insert("similarity", e.similarity);
@@ -86,6 +91,10 @@ public slots:
 
 signals:
     void storeError(const QString& msg);
+
+private:
+    qint64 _lastTsMs = -1;   // 同毫秒 seq 连续性游标（仅 worker 线程触碰）
+    int _lastSeq = 0;
 };
 
 // ===== EventStore =====
@@ -118,6 +127,7 @@ void EventStore::preloadTodayLocked()
         const QJsonObject o = QJsonDocument::fromJson(f.readLine()).object();
         SecurityEvent e;
         e.tsMs = static_cast<qint64>(o.value("ts").toDouble());
+        e.seq = o.value("seq").toInt();   // 旧格式无 seq 时为 0，id 仍可生成
         e.subject = o.value("subject").toString();
         e.similarity = o.value("similarity").toDouble(-1.0);
         e.detail = o.value("detail").toString();
@@ -161,7 +171,8 @@ QByteArray EventStore::recentJsonBytes(int limit, const QString& typeKey) const
         if (!typeKey.isEmpty() && SecurityEvent::typeKey(e.type) != typeKey)
             continue;
         QJsonObject o;
-        o.insert("id", "e" + QString::number(e.tsMs));
+        // A5 去碰撞 ID：e<ts>-<seq>（seq 同毫秒单调；旧记录回读 seq=0 兼容）
+        o.insert("id", QStringLiteral("e%1-%2").arg(e.tsMs).arg(e.seq));
         o.insert("ts", static_cast<qint64>(e.tsMs));
         o.insert("type", SecurityEvent::typeKey(e.type));
         o.insert("type_name", SecurityEvent::typeName(e.type));
