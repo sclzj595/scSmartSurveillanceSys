@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PRD v2.0 · 智能视觉平台（智能安防监控系统）</title>
+<title>PRD v2.1 · 智能视觉平台（智能安防监控系统）</title>
 <style>
   :root{
     --bg:#fafafa; --paper:#ffffff; --ink:#18181b; --ink-2:#52525b; --ink-3:#a1a1aa;
@@ -68,7 +68,7 @@
 <div class="wrap">
 <nav>
   <div class="brand">智能视觉平台</div>
-  <div class="ver">PRD v2.0 · 评审中</div>
+  <div class="ver">PRD v2.1 · 评审中</div>
   <div class="grp">文档</div>
   <a href="#c1">1 定位·愿景·路线</a>
   <a href="#c2">2 现状盘点</a>
@@ -86,9 +86,9 @@
 </nav>
 <main>
 
-<h1 id="top">智能视觉平台 · 产品需求文档 v2.0</h1>
+<h1 id="top">智能视觉平台 · 产品需求文档 v2.1</h1>
 <div class="meta">
-  <span class="chip teal">v2.0（取代 v1.0）</span>
+  <span class="chip teal">v2.1（取代 v2.0 / v1.0）</span>
   <span class="chip">2026-10-17</span>
   <span class="chip">状态：评审中</span>
   <span class="chip">前序：<a href="PRD-智能安防监控系统-v1.html">v1.0 单机闭环版</a></span>
@@ -134,13 +134,20 @@
     <tr><td class="num">D7</td><td>事件无持久化与存证</td><td>⬜</td><td>FR-07 事件中心，V0.4</td></tr>
     <tr><td class="num">D8</td><td>暂停恢复回放旧帧</td><td class="ok">✅ 已修复</td><td>采集暂停期 grab() 丢帧</td></tr>
     <tr><td class="num">D9</td><td>设备拔出/占用无处理</td><td>⬜</td><td>源状态机（7.2），V0.6</td></tr>
+    <tr><td class="num">D10</td><td>点"注册人脸"卡死退出（GUI 无锁并发 detectMultiScale + 界面冻结）</td><td class="ok">✅ 已修复</td><td>注册异步化 + 分类器锁纪律（6.4），<code>0b044c3</code></td></tr>
+    <tr><td class="num">D11</td><td>注册成功后开启识别即崩（train/predict 特征口径不一致 → cv::norm 断言）</td><td class="ok">✅ 已修复</td><td>描述子同口径 + 分析线程异常隔离（6.4），<code>2e733e0</code></td></tr>
+    <tr><td class="num">D12</td><td>注册后仍显示"陌生人"（逐像素 L2 度量缺陷，同人距离>>阈值，数学上不可命中）</td><td class="ok">✅ 已修复</td><td>网格直方图 LBPH（6.1），<code>09d36df</code></td></tr>
   </tbody>
 </table>
 <h3>2.2 已具备的技术资产</h3>
 <ul>
   <li><strong>异步识别管线</strong>：采集线程 → FrameBank → 分析线程（25Hz 自适应跳帧）→ GUI 渲染节拍（30fps）。GUI 线程零 CV 计算。</li>
   <li><strong>结构化结果通道</strong>：AnalysisResult（人脸/遗留物/入侵）跨线程传递，检测与渲染解耦。</li>
-  <li><strong>诊断角标</strong>：预览 fps / 分析 Hz / 单帧耗时实时显示（5.2 指标体系的基础）。</li>
+  <li><strong>诊断角标</strong>：预览 fps / 分析 Hz / 单帧耗时 / <strong>帧龄</strong>四项实时显示（5.2 指标体系的基础）。</li>
+  <li><strong>网格直方图 LBPH</strong>：4×4 网格 × 256 维归一化直方图描述子，距离值域可控、阈值可标定（6.1）。</li>
+  <li><strong>两段式异步注册</strong>：检测 → 弹窗预览/编辑姓名 → 入库，全程线程池执行，GUI 不冻结（6.3）。</li>
+  <li><strong>异常隔离</strong>：分析线程单帧异常仅丢帧记日志，算法缺陷不杀死进程（6.4）。</li>
+  <li><strong>构建防呆</strong>：CMake 默认 Release（历史教训：MinGW 留空 = -O0，CV 像素循环慢 3–5 倍）。</li>
   <li><strong>算法基线</strong>：HAAR 人脸检测、LBPH 识别、MOG2 背景建模、禁区判定。</li>
 </ul>
 
@@ -236,9 +243,9 @@
   <thead><tr><th>指标</th><th>定义</th><th style="width:170px">验收口径（720p）</th><th style="width:90px">现状</th></tr></thead>
   <tbody>
     <tr><td>采集帧率</td><td>摄像头实际交付帧率</td><td class="num">≥ 25 fps</td><td><span class="part">◐ 可测未记录</span></td></tr>
-    <tr><td>渲染帧率</td><td>窗口实际显示帧率</td><td class="num">≥ 24 fps，波动 ≤ ±2</td><td><span class="part">◐ 角标已有</span></td></tr>
-    <tr><td>识别耗时</td><td>单次分析耗时（含 P95）</td><td class="num">P95 ≤ 120 ms</td><td><span class="part">◐ 均值已有</span></td></tr>
-    <tr><td><strong>帧龄</strong></td><td>显示画面距采集的时长</td><td class="num">≤ 250 ms</td><td>⬜（V0.2 补测量）</td></tr>
+    <tr><td>渲染帧率</td><td>窗口实际显示帧率</td><td class="num">≥ 24 fps，波动 ≤ ±2</td><td><span class="part">◐ 实测 22fps（疑似相机交付上限，非管线瓶颈）</span></td></tr>
+    <tr><td>识别耗时</td><td>单次分析耗时（含 P95）</td><td class="num">P95 ≤ 120 ms</td><td><span class="part">◐ 实测均值 ~88ms（Release），P95 待记录</span></td></tr>
+    <tr><td><strong>帧龄</strong></td><td>显示画面距采集的时长</td><td class="num">≤ 250 ms</td><td><span class="part">◐ 已上线角标，实测 ~9ms，远优于目标</span></td></tr>
     <tr><td>队列积压</td><td>待处理帧数/最旧帧年龄</td><td>恒为 0（单槽覆盖语义）</td><td class="ok">✅ 结构性保证</td></tr>
     <tr><td>长稳</td><td>2h 连续运行指标与内存</td><td>无漂移、无泄漏</td><td>⬜（V0.2 验收）</td></tr>
   </tbody>
@@ -264,7 +271,7 @@
   <thead><tr><th>能力</th><th>当前算法</th><th>演进方向（不约束本期）</th></tr></thead>
   <tbody>
     <tr><td>人脸检测</td><td>HAAR 级联</td><td>YOLO/MediaPipe 类检测器（引擎接口不变，可替换）</td></tr>
-    <tr><td>人脸识别</td><td>LBPH（L2 距离）</td><td>深度特征（ArcFace 类）+ 特征库</td></tr>
+    <tr><td>人脸识别</td><td>LBPH 网格直方图（4×4 格 × 256 维归一化直方图，L2 距离；同人 &lt;1.5 / 异人 &gt;2.5，阈值 55%）</td><td>深度特征（ArcFace 类）+ 特征库</td></tr>
     <tr><td>运动目标</td><td>MOG2 背景建模</td><td>光流/检测器级联跟踪</td></tr>
     <tr><td>目标跟踪</td><td>重叠匹配（简版）</td><td>IoU/卡尔曼 级跟踪器</td></tr>
   </tbody>
@@ -280,9 +287,38 @@ AnalysisResult {
 </pre>
 <ul>
   <li>相似度口径 <strong>R1</strong>：对外一律 0–100%（越高越相似），无结果显示"—"，内部数值/异常值永不渲染。</li>
-  <li>标注规范 <strong>FR-08</strong>：绿=已识别、黄=陌生人、灰细=跟踪中、琥珀=遗留物、红虚线=禁区、红粗=入侵；中文经 QPainter 渲染。</li>
+  <li>标注规范 <strong>FR-08</strong>：绿=已识别、黄=陌生人（<strong>附相似度%</strong>，供阈值现场标定）、灰细=跟踪中、琥珀=遗留物、红虚线=禁区、红粗=入侵；中文经 QPainter 渲染。</li>
   <li>识别频率约束：≥ 10 次/秒（当前上限 25Hz 节流 + 跳帧）。</li>
+  <li>相似度映射（<code>09d36df</code> 定版）：距离 d → 相似度 <code>100 − 30d</code>，值域 0–100%。调整映射或阈值须同步本条并附标定数据（Q9）。</li>
 </ul>
+<h3>6.3 人脸注册交互规范（两段式异步，已落地）</h3>
+<pre class="arch">
+[点击注册] → 线程池：检测+提取最大人脸 ──失败──> 日志提示原因（无人脸/过小），按钮恢复
+                │ 成功
+                ▼
+        <span class="hl">弹窗：人脸灰度预览 + 姓名编辑框</span>（建议名"用户N"自动跳过已占用）[注册|取消]
+                │ 确认
+                ▼
+        线程池：入库训练 → 日志"人脸注册成功: {姓名}"
+</pre>
+<ul>
+  <li>两段均经 <code>QtConcurrent</code> + <code>QFutureWatcher</code> 执行，GUI 全程不冻结；执行中按钮置灰，取消/失败均恢复。</li>
+  <li>准入口径与识别一致：最大人脸 ≥ 60×60px，否则拒绝注册（FaceTooSmall）。</li>
+  <li><strong>同名注册 = 补充样本</strong>：同一人多角度/多光照多次注册提高识别率，不新建档案。</li>
+  <li>提取的人脸为私有副本（clone），弹窗/入库期间不受后续帧影响。</li>
+</ul>
+<h3>6.4 识别工程纪律（D10–D12 事故复盘转化的硬规则）</h3>
+<table>
+  <thead><tr><th>规则</th><th>内容</th><th>事故来源</th></tr></thead>
+  <tbody>
+    <tr><td>分类器互斥</td><td>同一 CascadeClassifier 禁止并发 detectMultiScale；检测/注册一律经 <code>_mutex</code> 串行，锁纪律由类型保证（检测方法不对外暴露）</td><td class="num">D10</td></tr>
+    <tr><td>GUI 零阻塞</td><td>预计 &gt;50ms 的工作不得进入 GUI 线程；统一 QtConcurrent + watcher 回 GUI 报结果</td><td class="num">D10</td></tr>
+    <tr><td>描述子同口径</td><td>train 与 predict 必须经同一 describe() 路径，库存描述子不存原始图；predict 对尺寸不符样本防御跳过</td><td class="num">D11</td></tr>
+    <tr><td>单帧异常隔离</td><td>分析线程 try/catch（cv::Exception + std::exception）：单帧异常仅丢帧记日志，算法缺陷不杀死进程</td><td class="num">D11</td></tr>
+    <tr><td>度量先验证</td><td>引入新比对度量时先确认值域与阈值语义可标定（距离→相似度映射有依据），不允许"值域未知先定阈值"</td><td class="num">D12</td></tr>
+    <tr><td>Release 防呆</td><td>CMake 默认 Release；性能改动附 -O3 前后测量（-O0 下 CV 慢 3–5 倍，禁止据 -O0 数据做决策）</td><td>构建排查</td></tr>
+  </tbody>
+</table>
 
 <h2 id="c7">7 设备管理与硬件接入规范</h2>
 <h3>7.1 统一源接口（FR-11，S1.5 核心）</h3>
@@ -379,8 +415,8 @@ AnalysisResult {
   <thead><tr><th style="width:80px">版本</th><th>目标</th><th>验收证据</th><th style="width:90px">状态</th></tr></thead>
   <tbody>
     <tr><td class="num">V0.1</td><td>基线与构建验证</td><td>标签 <code>v0.1.0-baseline</code></td><td class="ok">✅</td></tr>
-    <tr><td class="num">V0.2</td><td>视频性能专项诊断</td><td>5.2 指标实测记录 + 2h 长稳曲线（写入 13 章变更记录）</td><td><span class="part">◐ 角标已就绪</span></td></tr>
-    <tr><td class="num">V0.3</td><td>最新帧调度与线程优化</td><td>帧龄 ≤250ms 实测；运行验证后打 <code>v0.2.0-pipeline</code></td><td><span class="part">◐ 代码已落地</span></td></tr>
+    <tr><td class="num">V0.2</td><td>视频性能专项诊断</td><td>5.2 指标实测记录 + 2h 长稳曲线（写入 13 章变更记录）</td><td><span class="part">◐ 帧龄 9ms / 耗时 88ms 已实测，余 2h 长稳</span></td></tr>
+    <tr><td class="num">V0.3</td><td>最新帧调度与线程优化</td><td>帧龄 ≤250ms 实测；运行验证后打 <code>v0.2.0-pipeline</code></td><td><span class="part">◐ 实测帧龄 9ms 无累积（D1/D2/D10–D12 关闭），待 2h 长稳后打标</span></td></tr>
     <tr><td class="num">V0.4</td><td>事件持久化与截图存证</td><td>重启后事件可查、截图在盘；24h 长稳通过</td><td>⬜</td></tr>
     <tr><td class="num">V0.5</td><td>档案持久化 + 禁区可靠性</td><td>重启档案完整（修 D6）；缩放窗口禁区判定准确（修 D5/R3）</td><td>⬜</td></tr>
     <tr><td class="num">V0.6</td><td>设备统一接口</td><td>USB 迁移至源抽象；拔插自动恢复（修 D9）；RTSP 单路接入</td><td>⬜</td></tr>
@@ -400,6 +436,7 @@ AnalysisResult {
     <tr><td class="num">Q6</td><td><span class="tbd">[TBD]</span> 截图留存时长；隐私说明是否独立法务评审</td><td>8/10 章边界</td></tr>
     <tr><td class="num">Q7</td><td><span class="tbd">[TBD]</span> S2 远程视频：WebRTC 评估结论（自建 SFU vs P2P vs 放弃远程视频仅推送告警）</td><td>移动端形态</td></tr>
     <tr><td class="num">Q8</td><td><span class="tbd">[TBD]</span> 引擎是否拆出独立服务进程（当前进程内分层已满足，拆分触发条件需定义）</td><td>S2/S3 架构</td></tr>
+    <tr><td class="num">Q9</td><td><span class="tbd">[TBD]</span> LBPH 阈值标定：采集同人/异人相似度实测样本（陌生人标签已显示%），确定 55% 与映射系数 <code>100−30d</code> 是否定版</td><td>6.2 识别口径</td></tr>
   </tbody>
 </table>
 
@@ -417,12 +454,18 @@ AnalysisResult {
     <tr><td>2026-10-17</td><td class="num"><code>8fd24e8</code> <code>v0.1.0-baseline</code></td><td>课程版基线：三模块功能完整、已运行验证；记录 D1–D9 缺陷清单</td></tr>
     <tr><td>2026-10-17</td><td class="num"><code>0c9a0d7</code></td><td>PRD v1.0（单机闭环版）</td></tr>
     <tr><td>2026-10-17</td><td class="num"><code>a647f6d</code></td><td><strong>perf/refactor</strong>：异步识别管线（FrameBank/ActiveObject/数据呈现分离）。证据：编译通过；帧龄与长稳实测 <span class="tbd">[待 V0.2/V0.3 补录]</span></td></tr>
-    <tr><td>2026-10-17</td><td>本次提交</td><td>PRD v2.0（平台架构版）+ 版本管理方案落地 + 基线打标</td></tr>
+    <tr><td>2026-10-17</td><td>—</td><td>PRD v2.0（平台架构版）+ 版本管理方案落地 + 基线打标</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>43ce053</code></td><td><strong>perf</strong>：Release 构建修复（原 -O0，CV 慢 3–5 倍）+ 帧龄角标。证据：分析耗时由数倍量级降至均值 ~88ms</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>0b044c3</code></td><td><strong>fix</strong>：注册人脸卡死崩溃（D10：GUI 无锁并发 detectMultiScale + 界面冻结）→ 注册异步化 + 分类器锁纪律</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>2e733e0</code></td><td><strong>fix</strong>：开启识别崩溃（D11：train/predict 特征口径不一致 → cv::norm 断言）→ 描述子同口径 + 分析线程单帧异常隔离</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>3bff63e</code></td><td><strong>feat</strong>：注册两段式交互——弹窗人脸预览 + 姓名编辑，建议名自动编号，同名=补充样本（6.3）</td></tr>
+    <tr><td>2026-10-17</td><td class="num"><code>09d36df</code></td><td><strong>fix</strong>：识别永不命中（D12）→ LBPH 改网格直方图比对，距离值域收敛 0–5.66，相似度映射定版，陌生人标签附相似度%</td></tr>
+    <tr><td>2026-10-17</td><td>本次提交</td><td>PRD v2.1：同步 D10–D12 处置、新增 6.3 注册交互规范 / 6.4 工程纪律、指标实测数据回填、新增 Q9 阈值标定</td></tr>
   </tbody>
 </table>
 
 <footer>
-  PRD v2.0 · 智能视觉平台（智能安防监控系统）· 2026-10-17 · 状态：评审中<br>
+  PRD v2.1 · 智能视觉平台（智能安防监控系统）· 2026-10-17 · 状态：评审中<br>
   前序文档：PRD v1.0（单机闭环版，保留作为 S1 阶段决策记录）· 证据源：源码走查、现场截图、操作员反馈
 </footer>
 </main>
