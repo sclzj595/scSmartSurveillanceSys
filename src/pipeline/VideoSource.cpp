@@ -38,6 +38,10 @@ public:
             _cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 0.25);   // 手动：锁死快门（帧率与亮度双稳定）
             _cap.set(cv::CAP_PROP_EXPOSURE, _cfg.exposure);
         }
+        // 画质增强器（逆光补偿）：读帧路径逐帧应用，预览/分析/推流同帧受益
+        _clahe.release();
+        if (_cfg.enhance && _cfg.clipLimit > 1.0)
+            _clahe = cv::createCLAHE(_cfg.clipLimit, cv::Size(8, 8));
         qInfo() << "USB source opened:"
                 << _cap.get(cv::CAP_PROP_FRAME_WIDTH) << "x" << _cap.get(cv::CAP_PROP_FRAME_HEIGHT)
                 << "fps=" << _cap.get(cv::CAP_PROP_FPS)
@@ -48,7 +52,24 @@ public:
             warmUpAutoExposure();   // 冲掉 AE 收敛期的过曝帧（用户实测"刚开启过曝"）
         return true;
     }
-    bool read(cv::Mat& out) override { _cap >> out; return !out.empty(); }
+    bool read(cv::Mat& out) override
+    {
+        _cap >> out;
+        if (out.empty())
+            return false;
+        // CLAHE 逆光补偿：只调 LAB 的 L 通道（局部自适应均衡）——逆光前景提亮、
+        // 暗部细节显现，色度不动；clipLimit 限制放大倍数防噪声爆炸
+        if (_clahe) {
+            cv::Mat lab;
+            cv::cvtColor(out, lab, cv::COLOR_BGR2Lab);
+            std::vector<cv::Mat> ch;
+            cv::split(lab, ch);
+            _clahe->apply(ch[0], ch[0]);
+            cv::merge(ch, lab);
+            cv::cvtColor(lab, out, cv::COLOR_Lab2BGR);
+        }
+        return true;
+    }
     void close() override
     {
         if (_cap.isOpened())
@@ -90,6 +111,7 @@ private:
 
     VideoSourceConfig _cfg;
     cv::VideoCapture _cap;
+    cv::Ptr<cv::CLAHE> _clahe;   // 逆光补偿（空 = 关闭）
 };
 
 // RTSP 网络流：FFMPEG 后端 + socket 超时。
