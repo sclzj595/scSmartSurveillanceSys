@@ -3,14 +3,13 @@
 #define DATACONFIG_H
 
 #include <QString>
-#include <QCoreApplication>
+#include <mvcore/PathResolver.h>
 
 class DataConfig {
 public:
-    // 运行时数据统一锚定 exe 目录（applicationDirPath）：
-    // 无论从 IDE / 双击 / 终端何种 CWD 启动，级联、档案、事件存证、
-    // 参数文件全部稳定落位 build/bin，杜绝 CWD 漂移导致的静默写失败
-    static QString appDir() { return QCoreApplication::applicationDirPath(); }
+    // 运行时数据统一锚定 exe 目录：实现单点在 mvcore::PathResolver（套件硬约束），
+    // 本类只保留 SS 业务路径语义（级联/档案/事件/参数的具体文件名）
+    static QString appDir() { return mvcore::PathResolver::appDir(); }
 
     static QString faceCascadePath() {
         return appDir() + "/haarcascade_frontalface_default.xml";

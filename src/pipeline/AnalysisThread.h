@@ -13,8 +13,11 @@
 
 #include <QThread>
 #include <atomic>
-#include "pipeline/FrameBank.h"
+#include <mvcore/FrameBank.h>
 #include "core/AnalysisTypes.h"
+
+// FrameBank 已提炼至套件共享库 mvcore（接口完全兼容，调用点零改动）
+using mvcore::FrameBank;
 
 class FaceRecognition;
 class ObjectDetection;

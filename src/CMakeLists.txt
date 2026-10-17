@@ -15,8 +15,7 @@ set(APP_SOURCES
     ui/TitleBar.h              ui/TitleBar.cpp             # Mac 风自绘标题栏（红绿灯）
     ui/theme/DesignTokens.h     # 设计令牌（颜色/圆角/间距刻度单点）
     ui/theme/ThemeManager.h     ui/theme/ThemeManager.cpp   # 主题单点：令牌→QSS/原生标题栏
-    # pipeline —— 异步识别管线
-    pipeline/FrameBank.h
+    # pipeline —— 异步识别管线（FrameBank 已提炼至 mvcore 共享库，见根 CMakeLists）
     pipeline/VideoSource.h      pipeline/VideoSource.cpp
     pipeline/VideoCaptureThread.h pipeline/VideoCaptureThread.cpp
     pipeline/AnalysisThread.h   pipeline/AnalysisThread.cpp
@@ -47,6 +46,7 @@ target_link_libraries(SmartSurveillance
     Qt5::Widgets
     Qt5::Concurrent
     ${OpenCV_LIBS}
+    mvcore            # 套件共享基础库：FrameBank/PathResolver/EventId（header-only）
     FaceAlgorithm      # 可插拔人脸算法库 DLL（同一构建树，产物自动落 build/bin）
     medialink          # 独立服务层：HTTP 数据服务 + WebRTC 推流（PRD 第 9 章）
 )

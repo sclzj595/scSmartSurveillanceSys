@@ -44,6 +44,10 @@ add_subdirectory(${FACEALGORITHM_DIR} ${CMAKE_BINARY_DIR}/FaceAlgorithm)
 # 独立服务层（PRD 第 9 章）：HTTP 数据服务 + WebRTC 推流（纯 STL，无 Qt/OpenCV 依赖）
 add_subdirectory(${CMAKE_SOURCE_DIR}/../MediaLink ${CMAKE_BINARY_DIR}/MediaLink)
 
+# 套件共享基础库（header-only：FrameBank/PathResolver/EventId，无 ABI 面）
+set(MVCORE_DIR "${CMAKE_SOURCE_DIR}/../mvcore" CACHE PATH "mvcore 源码目录")
+add_subdirectory(${MVCORE_DIR} ${CMAKE_BINARY_DIR}/mvcore)
+
 # 添加子目录
 add_subdirectory(src)
 

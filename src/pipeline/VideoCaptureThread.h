@@ -5,8 +5,11 @@
 #pragma execution_character_set("utf-8")
 
 #include "core/dataConfig.h"
-#include "pipeline/FrameBank.h"
+#include <mvcore/FrameBank.h>
 #include "pipeline/VideoSource.h"
+
+// FrameBank 已提炼至套件共享库 mvcore（接口完全兼容，调用点零改动）
+using mvcore::FrameBank;
 #include <QThread>
 #include <QMutex>
 #include <QMutexLocker>
