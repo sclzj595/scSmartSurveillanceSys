@@ -2,8 +2,11 @@
 #include "ui/theme/ThemeManager.h"
 
 #include <QApplication>
+#include <QDebug>
 #include <QWidget>
 #include <QMap>
+#include <QVector>
+#include <algorithm>
 
 #ifdef Q_OS_WIN
 #include "ui/WinTheme.h"
@@ -194,7 +197,21 @@ QScrollBar::handle:horizontal:hover { background: @borderHover; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 )";
 
+    // 令牌替换（单前缀约定：@token）：**最长键优先**——@border 是 @borderStrong
+    // 的前缀，短键先替换会污染长键（"#262e3aStrong"）；未替换残留的 @ 会让
+    // QCss::Parser 拒载整张样式表，故末尾守护告警
+    QVector<QString> keys;
     for (auto it = tok.constBegin(); it != tok.constEnd(); ++it)
-        qss.replace(QLatin1Char('@') + it.key() + QLatin1Char('@'), it.value());
+        keys << it.key();
+    std::sort(keys.begin(), keys.end(),
+              [](const QString& a, const QString& b) { return a.length() > b.length(); });
+    for (const QString& k : keys) {
+        QString pat;
+        pat += QChar('@');
+        pat += k;
+        qss.replace(pat, tok.value(k));
+    }
+    if (qss.contains(QLatin1Char('@')))
+        qWarning() << "[theme] unreplaced tokens remain:" << qss.mid(qss.indexOf(QLatin1Char('@')), 24);
     return qss;
 }
