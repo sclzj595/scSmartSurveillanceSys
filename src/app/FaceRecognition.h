@@ -30,10 +30,19 @@ public:
     // 仅在分析线程调用；内部持 _mutex
     void analyze(const cv::Mat& frame, std::vector<FaceResult>& out);
 
-    // 完整注册流程：灰度化→均衡化→检测→取最大人脸→入库训练
-    // 可在任意线程调用（内部全程持 _mutex，与 analyze 串行化——
-    // 同一 CascadeClassifier 并发 detectMultiScale 非线程安全，禁止无锁并发）
-    RegisterStatus registerFromFrame(const cv::Mat& bgrFrame, const QString& name);
+    // 两段式注册 · 第一步：检测并提取最大人脸（不入库）
+    // 可在任意线程调用（内部持 _mutex，与 analyze 串行化——
+    // 同一 CascadeClassifier 并发 detectMultiScale 非线程安全）
+    struct RegisterDetection {
+        RegisterStatus status = RegisterStatus::NoFace;
+        cv::Mat face;          // Ok 时有效：人脸灰度 ROI
+        QString suggestedName; // 弹窗建议名（"用户N"，自动跳过已占用）
+    };
+    RegisterDetection detectFaceForRegister(const cv::Mat& bgrFrame);
+
+    // 两段式注册 · 第二步：将已提取人脸入库到指定姓名
+    // 同名视为补充样本（同一人多次注册提高识别率）；与 analyze 互斥
+    bool commitRegister(const cv::Mat& grayFace, const QString& name);
 
     void setEnabled(bool enabled) { _enabled = enabled; }
 
@@ -54,6 +63,7 @@ private:
     // 以下方法都必须在持有 _mutex 时调用
     void detectFaces(cv::Mat &gray, std::vector<cv::Rect> &faces);
     void registerFaceLocked(const cv::Mat& grayFace, const QString& name);
+    QString suggestedNameLocked() const;
 
     cv::CascadeClassifier _faceCascade;
     LBPHRecognizer _recognizer;

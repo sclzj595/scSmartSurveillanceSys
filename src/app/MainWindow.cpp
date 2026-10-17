@@ -8,6 +8,9 @@
 #include <QCloseEvent>
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QLineEdit>
 
 MainWindow::MainWindow(QWidget *parent) : QWidget(parent)
 {
@@ -160,7 +163,7 @@ void MainWindow::initUI()
     });
     btnLayout->addWidget(_forbiddenZoneBtn);
 
-    // 注册人脸（异步：检测+训练在线程池执行，GUI 不冻结；结果经 watcher 回 GUI）
+    // 注册人脸（两段式异步：检测 → 弹窗预览/编辑姓名 → 入库；GUI 全程不冻结）
     _registerFaceBtn = new QPushButton("注册人脸", this);
     connect(_registerFaceBtn, &QPushButton::clicked, this, [this]() {
         if (_lastFrame.empty()) {
@@ -168,27 +171,81 @@ void MainWindow::initUI()
             return;
         }
         _registerFaceBtn->setEnabled(false);
-        _logLabel->setText("正在注册人脸…");
+        _logLabel->setText("正在检测人脸…");
 
         cv::Mat snapshot = _lastFrame.clone();  // 私有副本，避免与渲染/分析共享数据
-        auto* watcher = new QFutureWatcher<FaceRecognition::RegisterStatus>(this);
+        auto* watcher = new QFutureWatcher<FaceRecognition::RegisterDetection>(this);
         connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher]() {
-            _registerFaceBtn->setEnabled(true);
-            switch (watcher->result()) {
-            case FaceRecognition::RegisterStatus::Ok:
-                _logLabel->setText("人脸注册成功: 新用户");
-                break;
-            case FaceRecognition::RegisterStatus::NoFace:
-                _logLabel->setText("注册失败：未检测到人脸，请正对摄像头后重试");
-                break;
-            case FaceRecognition::RegisterStatus::FaceTooSmall:
-                _logLabel->setText("注册失败：人脸过小，请靠近摄像头后重试");
-                break;
-            }
+            const FaceRecognition::RegisterDetection det = watcher->result();
             watcher->deleteLater();
+
+            if (det.status != FaceRecognition::RegisterStatus::Ok) {
+                _registerFaceBtn->setEnabled(true);
+                _logLabel->setText(det.status == FaceRecognition::RegisterStatus::FaceTooSmall
+                    ? "注册失败：人脸过小，请靠近摄像头后重试"
+                    : "注册失败：未检测到人脸，请正对摄像头后重试");
+                return;
+            }
+
+            // ---- 弹窗：人脸预览 + 姓名编辑 ----
+            QDialog dlg(this);
+            dlg.setWindowTitle(QStringLiteral("注册人脸"));
+            dlg.setMinimumWidth(260);
+            QVBoxLayout* lay = new QVBoxLayout(&dlg);
+
+            cv::Mat previewMat;
+            cv::resize(det.face, previewMat, cv::Size(140, 140));
+            cv::cvtColor(previewMat, previewMat, cv::COLOR_GRAY2BGR);
+            QImage previewImg(previewMat.data, previewMat.cols, previewMat.rows,
+                              previewMat.step, QImage::Format_BGR888);
+            QLabel* preview = new QLabel(&dlg);
+            preview->setPixmap(QPixmap::fromImage(previewImg));
+            preview->setAlignment(Qt::AlignCenter);
+
+            QLabel* hint = new QLabel(QStringLiteral("检测到人脸，请确认预览并编辑姓名："), &dlg);
+            QLineEdit* nameEdit = new QLineEdit(det.suggestedName, &dlg);
+            nameEdit->setPlaceholderText(QStringLiteral("输入人员姓名"));
+            nameEdit->selectAll();
+
+            QDialogButtonBox* btns = new QDialogButtonBox(
+                QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+            btns->button(QDialogButtonBox::Ok)->setText(QStringLiteral("注册"));
+            btns->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
+
+            lay->addWidget(hint);
+            lay->addWidget(preview);
+            lay->addWidget(nameEdit);
+            lay->addWidget(btns);
+            connect(btns, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+            connect(btns, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+            if (dlg.exec() != QDialog::Accepted) {
+                _registerFaceBtn->setEnabled(true);
+                _logLabel->setText("已取消注册");
+                return;
+            }
+
+            QString name = nameEdit->text().trimmed();
+            if (name.isEmpty())
+                name = det.suggestedName;
+
+            // ---- 第二段：入库训练（异步）----
+            _logLabel->setText(QStringLiteral("正在注册「%1」…").arg(name));
+            const cv::Mat face = det.face;
+            auto* commitWatcher = new QFutureWatcher<bool>(this);
+            connect(commitWatcher, &QFutureWatcherBase::finished, this, [this, commitWatcher, name]() {
+                _registerFaceBtn->setEnabled(true);
+                _logLabel->setText(commitWatcher->result()
+                    ? QStringLiteral("人脸注册成功: %1").arg(name)
+                    : QStringLiteral("注册失败：入库名称无效"));
+                commitWatcher->deleteLater();
+            });
+            commitWatcher->setFuture(QtConcurrent::run([this, face, name]() {
+                return _faceRecognizer->commitRegister(face, name);
+            }));
         });
         watcher->setFuture(QtConcurrent::run([this, snapshot]() {
-            return _faceRecognizer->registerFromFrame(snapshot, QStringLiteral("新用户"));
+            return _faceRecognizer->detectFaceForRegister(snapshot);
         }));
     });
     btnLayout->addWidget(_registerFaceBtn);

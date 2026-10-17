@@ -163,20 +163,21 @@ void FaceRecognition::analyze(const cv::Mat& frame, std::vector<FaceResult>& out
     }
 }
 
-FaceRecognition::RegisterStatus FaceRecognition::registerFromFrame(const cv::Mat& bgrFrame, const QString& name) {
-    if (bgrFrame.empty()) return RegisterStatus::NoFace;   // 调用方保证非空，此处兜底
+FaceRecognition::RegisterDetection FaceRecognition::detectFaceForRegister(const cv::Mat& bgrFrame) {
+    RegisterDetection det;
+    if (bgrFrame.empty()) return det;   // status = NoFace
 
     cv::Mat gray;
     cv::cvtColor(bgrFrame, gray, cv::COLOR_BGR2GRAY);
     cv::equalizeHist(gray, gray);
 
-    // 全程持锁：检测与训练、分析线程的检测互斥（同一 CascadeClassifier
+    // 全程持锁：检测、建议名生成与 analyze 的检测互斥（同一 CascadeClassifier
     // 不允许并发 detectMultiScale，否则概率性崩溃）
     QMutexLocker locker(&_mutex);
 
     std::vector<cv::Rect> faces;
     detectFaces(gray, faces);
-    if (faces.empty()) return RegisterStatus::NoFace;
+    if (faces.empty()) return det;
 
     // 选择最大人脸
     auto largest = std::max_element(faces.begin(), faces.end(),
@@ -185,10 +186,36 @@ FaceRecognition::RegisterStatus FaceRecognition::registerFromFrame(const cv::Mat
         });
 
     // 与 analyze 同一口径：人脸过小不参与识别，也不允许注册
-    if (largest->width < 60 || largest->height < 60) return RegisterStatus::FaceTooSmall;
+    if (largest->width < 60 || largest->height < 60) {
+        det.status = RegisterStatus::FaceTooSmall;
+        return det;
+    }
 
-    registerFaceLocked(gray(*largest), name);
-    return RegisterStatus::Ok;
+    det.status = RegisterStatus::Ok;
+    det.face = gray(*largest).clone();  // 持有私有副本，弹窗/入库期间不受后续帧影响
+    det.suggestedName = suggestedNameLocked();
+    return det;
+}
+
+bool FaceRecognition::commitRegister(const cv::Mat& grayFace, const QString& name) {
+    const QString trimmed = name.trimmed();
+    if (grayFace.empty() || trimmed.isEmpty()) return false;
+
+    QMutexLocker locker(&_mutex);
+    registerFaceLocked(grayFace, trimmed);
+    return true;
+}
+
+// 建议名"用户N"：取最小的未占用编号（前置条件：_mutex 已持有）
+QString FaceRecognition::suggestedNameLocked() const {
+    for (int i = 1; ; ++i) {
+        const QString candidate = QStringLiteral("用户%1").arg(i);
+        bool used = false;
+        for (const auto& pair : _labelMap) {
+            if (pair.second == candidate) { used = true; break; }
+        }
+        if (!used) return candidate;
+    }
 }
 
 void FaceRecognition::registerFaceLocked(const cv::Mat& face, const QString& name) {
