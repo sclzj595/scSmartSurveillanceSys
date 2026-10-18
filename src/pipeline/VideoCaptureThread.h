@@ -55,6 +55,7 @@ private:
     bool _isPaused = false;
     int _frameCount = 0;
     qint64 _startTime;
+    quint64 _lastSig = 0;   // 上一帧内容签名（重复帧去重，captureFps 口径=新帧/秒）
 };
 
 #endif  // VIDEOCAPTURETHREAD_H

@@ -2,6 +2,28 @@
 
 #include <QDateTime>
 #include <QDebug>
+#include <cstring>
+
+namespace {
+// 帧内容签名：FNV-1a 对 32 处分段采样（避免整帧 memcmp；分段跨全帧防
+// 只比头部漏检）。用于重复帧去重——部分 OpenCV 后端（FFmpeg/RTSP）在无新
+// 数据时会重复返回上一帧而非阻塞，不去重会让 capture_fps 虚高（RTSP 合成
+// 流实测 801/s）且 FrameBank 版本号空转、分析线程重复跑同一帧
+inline quint64 frameSignature(const cv::Mat& m)
+{
+    const uchar* d = m.data;
+    const size_t n = m.total() * m.elemSize();
+    if (!d || n == 0) return 0;
+    quint64 h = 1469598103934665603ull;
+    for (int i = 0; i < 32; ++i) {
+        const size_t off = n * size_t(i) / 32;
+        quint64 chunk = 0;
+        memcpy(&chunk, d + off, qMin<size_t>(8, n - off));
+        h = (h ^ chunk) * 1099511628211ull;
+    }
+    return h;
+}
+}  // namespace
 
 VideoCaptureThread::VideoCaptureThread(FrameBank* frameBank, QObject *parent)
     : QThread(parent), _bank(frameBank), _isPaused(false),
@@ -19,6 +41,7 @@ bool VideoCaptureThread::startCapture(const VideoSourceConfig& cfg) {
     _config = cfg;
     _isPaused = false;
     _frameCount = 0;
+    _lastSig = 0;   // 换源重置：首帧必为新帧
     _startTime = QDateTime::currentMSecsSinceEpoch();
     _isRunning = true;
     start();
@@ -118,7 +141,22 @@ void VideoCaptureThread::run() {
             continue;
         }
 
-        // 帧率统计
+        // 重复帧去重：内容签名与上一帧相同 → 非新帧（FFmpeg/RTSP 后端无新数据
+        // 时会重复回吐上一帧而非阻塞）。不计新帧、不投递分析；但帧率窗口照常
+        // 结算——"源冻结回吐"如实表现为 capture_fps=0，而非此前 801/s 虚高
+        const quint64 sig = frameSignature(frame);
+        if (sig == _lastSig) {
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - _startTime > 1000) {
+                emit fpsChanged(_frameCount);   // 窗口内全为重复帧 → 0
+                _frameCount = 0;
+                _startTime = now;
+            }
+            continue;
+        }
+        _lastSig = sig;
+
+        // 帧率统计（口径：新帧/秒 = 成功解码且内容变化）
         _frameCount++;
         qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
         qint64 elapsed = currentTime - _startTime;
@@ -127,7 +165,7 @@ void VideoCaptureThread::run() {
             _frameCount = 0;
             _startTime = currentTime;
             emit fpsChanged(fps);
-            qDebug() << "Capture FPS:" << fps;
+            qDebug() << "Capture FPS (new frames):" << fps;
         }
 
         // 写入最新帧槽：覆盖式，永不阻塞采集（FR-01 丢帧保时延）

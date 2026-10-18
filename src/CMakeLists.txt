@@ -10,11 +10,9 @@ set(APP_SOURCES
     ui/MainWindow.h             ui/MainWindow.cpp
     ui/OverlayRenderer.h        ui/OverlayRenderer.cpp
     ui/EventHistoryDialog.h     ui/EventHistoryDialog.cpp
-    ui/WinTheme.h
     ui/FramelessWindow.h       # 无边框窗基类：NCCALCSIZE 剥框架 + 缩放热区
     ui/TitleBar.h              ui/TitleBar.cpp             # Mac 风自绘标题栏（红绿灯）
-    ui/theme/DesignTokens.h     # 设计令牌（颜色/圆角/间距刻度单点）
-    ui/theme/ThemeManager.h     ui/theme/ThemeManager.cpp   # 主题单点：令牌→QSS/原生标题栏
+    ui/theme/ThemeManager.h     ui/theme/ThemeManager.cpp   # 主题适配层（令牌单点=mvcore/Theme.h）
     # pipeline —— 异步识别管线（FrameBank 已提炼至 mvcore 共享库，见根 CMakeLists）
     pipeline/VideoSource.h      pipeline/VideoSource.cpp
     pipeline/VideoCaptureThread.h pipeline/VideoCaptureThread.cpp
@@ -51,7 +49,7 @@ target_link_libraries(SmartSurveillance
     medialink          # 独立服务层：HTTP 数据服务 + WebRTC 推流（PRD 第 9 章）
 )
 if(WIN32)
-  target_link_libraries(SmartSurveillance dwmapi)   # 原生标题栏深色主题（WinTheme.h）
+  target_link_libraries(SmartSurveillance dwmapi)   # mvcore::wintheme 原生标题栏深色主题
 endif()
 
 # 设置目标属性 - 确保在build/bin下

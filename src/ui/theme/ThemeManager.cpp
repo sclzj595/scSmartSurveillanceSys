@@ -8,11 +8,7 @@
 #include <QVector>
 #include <algorithm>
 
-#ifdef Q_OS_WIN
-#include "ui/WinTheme.h"
-#endif
-
-using uitheme::ThemeTokens;
+using mvcore::uitheme::ThemeTokens;
 
 namespace {
 inline QString hex(const QColor& c) { return c.name(); }  // #rrggbb
@@ -26,24 +22,14 @@ ThemeManager& ThemeManager::instance()
 
 void ThemeManager::apply(const QString& themeName)
 {
-    _tokens = uitheme::byName(themeName);
+    _tokens = mvcore::uitheme::byName(themeName);
     qApp->setStyleSheet(buildQss(_tokens));
     emit themeChanged(_tokens.name);
 }
 
 void ThemeManager::applyNative(QWidget* widget) const
 {
-#ifdef Q_OS_WIN
-    if (!widget)
-        return;
-    const bool dark = _tokens.name == QStringLiteral("dark");
-    wintheme::applyDarkTitleBar(reinterpret_cast<HWND>(widget->winId()), dark,
-        RGB(_tokens.nativeCaption.red(),   _tokens.nativeCaption.green(),   _tokens.nativeCaption.blue()),
-        RGB(_tokens.nativeText.red(),      _tokens.nativeText.green(),      _tokens.nativeText.blue()),
-        RGB(_tokens.nativeBorder.red(),    _tokens.nativeBorder.green(),    _tokens.nativeBorder.blue()));
-#else
-    Q_UNUSED(widget);
-#endif
+    mvcore::wintheme::applyNative(widget, _tokens);   // DWM 实现单点在 mvcore
 }
 
 // 模板规范：颜色一律 @token@ 占位；圆角/间距/字号取 DesignTokens 刻度

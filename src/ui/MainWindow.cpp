@@ -747,7 +747,7 @@ void MainWindow::applyTheme(const QString &theme)
     // 详见 docs/UI设计规范.md；本函数只做宿主侧同步）
     ThemeManager::instance().apply(theme);
 
-    const uitheme::ThemeTokens& t = ThemeManager::instance().tokens();
+    const mvcore::uitheme::ThemeTokens& t = ThemeManager::instance().tokens();
     _currentTheme = t.name;
     _themeToggleBtn->setText(t.name == QStringLiteral("dark")
                                  ? QStringLiteral("浅色") : QStringLiteral("深色"));
