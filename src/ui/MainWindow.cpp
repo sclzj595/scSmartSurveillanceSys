@@ -631,8 +631,10 @@ VideoSourceConfig MainWindow::loadSourceConfig() const
     cfg.blackLift   = _settings->value("Camera/blackLift", 14).toDouble();
     cfg.clipLimit   = _settings->value("Camera/clipLimit", 1.2).toDouble();
     cfg.saturation  = _settings->value("Camera/saturation", 1.10).toDouble();
-    // 时域降噪（模拟驱动 3D NR）：Camera/nr=0 关闭
-    cfg.noiseReduction = _settings->value("Camera/nr", true).toBool();
+    // 时域降噪（模拟驱动 3D NR）：默认关——暗光时域平均产生蜡状涂抹/运动残影
+    // （78618af 定论"鬼影与掉帧不可接受"），a6325d4 revert 漏改本默认值。
+    // 暗光静止机位确需降噪时 ini 显式 Camera/nr=1
+    cfg.noiseReduction = _settings->value("Camera/nr", false).toBool();
     cfg.nrAlpha        = _settings->value("Camera/nrAlpha", 0.15).toDouble();
     return cfg;
 }
