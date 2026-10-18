@@ -50,7 +50,9 @@ MainWindow::MainWindow(QWidget *parent) : FramelessWindow(parent)
     // 源抽象与断流重连（D9）在采集线程内部完成，状态经 sourceStatus 回显日志栏
     _captureThread = new VideoCaptureThread(_frameBank, this);
     connect(_captureThread, &VideoCaptureThread::fpsChanged, this, [this](int fps) {
-        // 跨线程 queued 信号 → GUI 线程写入；renderTick 同线程读取（诊断角标"采集"）
+        // 跨线程 queued 信号 → GUI 线程写入；_resultMutex 保护 _hud 快照
+        // （v0.4.0 diagnostics 由 MediaLink HTTP 线程读取，见 initMediaLink）
+        QMutexLocker locker(&_resultMutex);
         _hud.captureFps = fps;
     });
     connect(_captureThread, &VideoCaptureThread::sourceStatus, this, [this](const QString& msg) {
@@ -125,8 +127,11 @@ void MainWindow::renderTick()
     const cv::Rect zone = _intrusionDetector->zone();
 
     QImage image(draw.data, draw.cols, draw.rows, draw.step, QImage::Format_BGR888);
-    _hud.latencyMs = frameAgeMs;
-    _hud.dropsPerSec = result.dropsPerSec;   // 帧覆盖率可见化（阶段02）
+    {
+        QMutexLocker locker(&_resultMutex);   // diagnostics(HTTP线程) 同步读 _hud
+        _hud.latencyMs = frameAgeMs;
+        _hud.dropsPerSec = result.dropsPerSec;   // 帧覆盖率可见化（阶段02）
+    }
     OverlayRenderer::paint(image, result.faces, result.objects, result.intrusion, zone, _hud);
 
     // 呈现帧模式推流（默认）：paint 后 draw 即标注帧，搭车喂给服务层
@@ -545,6 +550,34 @@ void MainWindow::initMediaLink()
         auto j = nlohmann::json::parse(bytes.constBegin(), bytes.constEnd(),
                                        nullptr, /*allow_exceptions=*/false);
         return j.is_discarded() ? nlohmann::json::array() : j;
+    };
+    // v0.4.0 截图：relPath 即 EventStore::imagePath 语义（相对 eventsRoot，
+    // 服务层已过路径安全校验）；存在才读，逐请求读盘——事件查询低频，无需缓存
+    p.image = [this](const std::string& relPath, std::string& bytes) -> bool {
+        const QString abs = _eventStore->resolveImagePath(QString::fromStdString(relPath));
+        if (abs.isEmpty()) return false;
+        QFile f(abs);
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        const QByteArray data = f.readAll();
+        if (data.isEmpty()) return false;
+        bytes.assign(data.constData(), size_t(data.size()));
+        return true;
+    };
+    // v0.4.0 诊断指标：_hud 写在 GUI 线程、此回调在 HTTP 线程，经 _resultMutex 快照
+    p.diagnostics = [this]() -> nlohmann::json {
+        OverlayRenderer::Hud h;
+        {
+            QMutexLocker locker(&_resultMutex);
+            h = _hud;
+        }
+        return {
+            {"capture_fps", h.captureFps},
+            {"analysis_fps", h.analysisFps},
+            {"render_fps", h.renderFps},
+            {"drops_per_sec", h.dropsPerSec},
+            {"process_ms", h.processMs},
+            {"latency_ms", h.latencyMs}
+        };
     };
     _mediaLink->setProviders(p);
 
