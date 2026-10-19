@@ -115,7 +115,10 @@ private:
     int _lastEvtSeq = 0;
     QPushButton* _historyBtn = nullptr;
 
-    void detectEvents(const AnalysisResult& result);   // 事件判定（业务层规则）
+    void detectEvents(const AnalysisResult& result);   // 事件判定（业务层规则，仅编排）
+    void collectFaceEvents(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events);
+    void collectIntrusionEvent(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events);
+    void collectLeftObjectEvent(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events);
     void stampEventIdentity(SecurityEvent& e);         // A5 ID 赋值单点：ts=采集时刻 + 同毫秒单调 seq（仅 GUI 线程）
 
     // ---- 独立服务层 MediaLink（PRD 第 9 章：HTTP 数据服务 + WebRTC 推流）----

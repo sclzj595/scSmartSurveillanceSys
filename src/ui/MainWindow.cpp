@@ -177,15 +177,29 @@ void MainWindow::stampEventIdentity(SecurityEvent& e)
     }
 }
 
-// 事件判定（业务层规则，PRD 8.1；引擎只给结构化结果，"什么算事件"在这里）
+// 事件判定（业务层规则，PRD 8.1；引擎只给结构化结果，"什么算事件"在这里）。
+// 审查 #6：本函数只做编排——每类事件的判定/冷却/组装提取为独立收集器，
+// 新增事件类型时加一个收集器即可，不再膨胀单函数
 void MainWindow::detectEvents(const AnalysisResult& result)
 {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     QVector<SecurityEvent> events;
 
+    collectFaceEvents(result, now, events);
+    collectIntrusionEvent(result, now, events);
+    collectLeftObjectEvent(result, now, events);
+
+    if (!events.isEmpty()) {
+        QMutexLocker locker(&_resultMutex);
+        _pendingEvents += events;
+    }
+}
+
+// 人脸两态：已知人员 / 陌生人（同人 30s / 类型整体 30s 冷却，R2）
+void MainWindow::collectFaceEvents(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events)
+{
     for (const FaceResult& f : result.faces) {
         if (f.known) {
-            // 人员识别：同人 30s 冷却（R2）
             if (_eventThrottle.allow(QStringLiteral("face_known:%1").arg(f.name), now, 30 * 1000)) {
                 SecurityEvent e;
                 e.type = SecurityEvent::FaceKnown;
@@ -197,7 +211,6 @@ void MainWindow::detectEvents(const AnalysisResult& result)
                 events.append(e);
             }
         } else if (f.similarity >= 0) {
-            // 陌生人出现：有检测未命中；陌生人无稳定标识，按类型整体 30s 冷却
             if (_eventThrottle.allow(QStringLiteral("face_unknown"), now, 30 * 1000)) {
                 SecurityEvent e;
                 e.type = SecurityEvent::FaceUnknown;
@@ -210,41 +223,42 @@ void MainWindow::detectEvents(const AnalysisResult& result)
             }
         }
     }
+}
 
-    if (result.intrusion.active) {
-        // 禁区入侵：10s 冷却（R2）
-        if (_eventThrottle.allow(QStringLiteral("intrusion:zone"), now, 10 * 1000)) {
-            SecurityEvent e;
-            e.type = SecurityEvent::Intrusion;
-            e.captureTsMs = result.captureTsMs;
-            e.subject = QStringLiteral("禁区");
-            e.detail = QStringLiteral("有目标进入禁区（目标数 %1）").arg(result.intrusion.offenders.size());
-            stampEventIdentity(e);
-            events.append(e);
-        }
+// 禁区入侵（10s 冷却，R2）
+void MainWindow::collectIntrusionEvent(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events)
+{
+    if (!result.intrusion.active)
+        return;
+    if (_eventThrottle.allow(QStringLiteral("intrusion:zone"), now, 10 * 1000)) {
+        SecurityEvent e;
+        e.type = SecurityEvent::Intrusion;
+        e.captureTsMs = result.captureTsMs;
+        e.subject = QStringLiteral("禁区");
+        e.detail = QStringLiteral("有目标进入禁区（目标数 %1）").arg(result.intrusion.offenders.size());
+        stampEventIdentity(e);
+        events.append(e);
     }
+}
 
-    // 遗留物沿检测：确认遗留出现 / 解除各触发一次（60s 保险冷却防抖动刷屏）
+// 遗留物沿检测：确认遗留出现 / 解除各触发一次（60s 保险冷却防抖动刷屏）
+void MainWindow::collectLeftObjectEvent(const AnalysisResult& result, qint64 now, QVector<SecurityEvent>& events)
+{
     const bool leftAny = !result.objects.empty();
-    if (leftAny != _lastLeftAny) {
-        if (_eventThrottle.allow(QStringLiteral("left_object"), now, 60 * 1000)) {
-            SecurityEvent e;
-            e.type = leftAny ? SecurityEvent::LeftObject : SecurityEvent::LeftCleared;
-            e.captureTsMs = result.captureTsMs;
-            e.subject = QStringLiteral("画面目标");
-            e.detail = leftAny
-                ? QStringLiteral("目标静止超过阈值，确认遗留")
-                : QStringLiteral("遗留物已移走");
-            stampEventIdentity(e);
-            events.append(e);
-        }
-        _lastLeftAny = leftAny;
+    if (leftAny == _lastLeftAny)
+        return;
+    if (_eventThrottle.allow(QStringLiteral("left_object"), now, 60 * 1000)) {
+        SecurityEvent e;
+        e.type = leftAny ? SecurityEvent::LeftObject : SecurityEvent::LeftCleared;
+        e.captureTsMs = result.captureTsMs;
+        e.subject = QStringLiteral("画面目标");
+        e.detail = leftAny
+            ? QStringLiteral("目标静止超过阈值，确认遗留")
+            : QStringLiteral("遗留物已移走");
+        stampEventIdentity(e);
+        events.append(e);
     }
-
-    if (!events.isEmpty()) {
-        QMutexLocker locker(&_resultMutex);
-        _pendingEvents += events;
-    }
+    _lastLeftAny = leftAny;
 }
 
 void MainWindow::onAnalysisReady(const AnalysisResult& result)

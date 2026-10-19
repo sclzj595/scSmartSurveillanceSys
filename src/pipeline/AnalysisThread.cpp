@@ -43,7 +43,13 @@ AnalysisThread::AnalysisThread(FrameBank* bank,
 AnalysisThread::~AnalysisThread()
 {
     shutdown();
-    wait(2000);
+    if (!wait(2000)) {
+        // 审查 #3：算法极端卡死时静默析构 = "QThread destroyed while running"
+        // 全进程崩溃——显式升级而非赌运气
+        qWarning() << "AnalysisThread did not exit within 2s, forcing terminate";
+        terminate();
+        wait(1000);
+    }
 }
 
 void AnalysisThread::shutdown()

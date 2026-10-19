@@ -54,8 +54,13 @@ void VideoCaptureThread::stopCapture() {
         _isRunning = false;
         // run() 的 read 受 RTSP readTimeoutMs(3s) 上界约束，join 需覆盖
         // "一次 read + 收尾释放"，否则旧线程未退出就换源会双线程并存
-        if (!wait(8000))
-            qWarning() << "Capture thread did not exit within 8s";
+        if (!wait(8000)) {
+            // 审查 #3：USB read 极端卡死时超时返回，静默继续会触发
+            // "QThread destroyed while running" 全进程崩溃——显式升级
+            qWarning() << "Capture thread did not exit within 8s, forcing terminate";
+            terminate();
+            wait(1000);
+        }
         qInfo() << "Video capture stopped";
     }
 }
